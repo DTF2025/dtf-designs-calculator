@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DTF Designs - Partner Categories</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container py-5">
+        <div class="text-center mb-4">
+            <img src="{{ url_for('static', filename='images/dtf-logo.png') }}" alt="DTF Designs Logo" class="img-fluid mb-3" style="max-width: 400px; height: auto;">
+        </div>
+        
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="mb-0">Partner Category Access</h1>
+            <a href="{{ url_for('admin_home') }}" class="btn btn-secondary">Back to Admin</a>
+        </div>
+        
+        <div class="alert alert-info" role="alert">
+            <strong>Control Partner Access:</strong> Toggle categories on/off to control which product types your partners can access. Disabled categories won't appear in the partner calculator.
+        </div>
+
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Partner Category Settings</h5>
+            </div>
+            <div class="card-body">
+                {% if categories %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th>Description</th>
+                                <th>Partner Access</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for category in categories %}
+                            <tr>
+                                <td><strong>{{ category.category_name }}</strong></td>
+                                <td>{{ category.description or 'No description' }}</td>
+                                <td>
+                                    {% if category.enabled_for_partners %}
+                                        <span class="badge bg-success">Enabled</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">Disabled</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('admin_toggle_partner_category', category_id=category.id) }}" 
+                                       class="btn btn-sm btn-{% if category.enabled_for_partners %}warning{% else %}success{% endif %}"
+                                       onclick="return confirm('Are you sure you want to {% if category.enabled_for_partners %}disable{% else %}enable{% endif %} {{ category.category_name }} for partners?')">
+                                        {% if category.enabled_for_partners %}
+                                            Disable
+                                        {% else %}
+                                            Enable
+                                        {% endif %}
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <p class="text-muted">No categories found. This shouldn't happen - please check your database.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">How This Works</h6>
+                    <ul class="mb-0">
+                        <li><strong>Enabled Categories:</strong> Partners can access these product types in their calculator</li>
+                        <li><strong>Disabled Categories:</strong> Hidden from partner calculator (customers still see all categories)</li>
+                        <li><strong>Use Cases:</strong> Temporarily disable Apparel during maintenance, or limit partner access to specific product lines</li>
+                        <li><strong>Safety:</strong> At least one category must remain enabled for partners to use the calculator</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

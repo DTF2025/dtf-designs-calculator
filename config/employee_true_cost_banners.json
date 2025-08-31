@@ -1,0 +1,21 @@
+{
+  "generated": "2025-08-31",
+  "materials_cost_per_sqft": {
+    "alpha": 0.17,
+    "jetflex": 0.23
+  },
+  "ink_cost_per_sqft": 0.18,
+  "machine_overhead_per_sqft": 0.25,
+  "finishing_cost_per_sqft": 0.20,
+  "finishing_fixed_per_banner": 0.60,
+  "addons_cost": {
+    "reinforced_corners": 2.00,
+    "wind_slits": 3.00,
+    "pole_pockets_pair": 4.00,
+    "double_sided_mult": 1.6
+  },
+  "setup_cost_per_job": 2.50,
+  "packaging_cost_per_job": 1.50,
+  "floor_margin_pct": 0.30,
+  "second_side_extra_per_sqft": 0.525
+}

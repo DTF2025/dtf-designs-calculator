@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DTF Designs - Admin Panel</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container py-5">
+        <div class="text-center mb-4">
+            <img src="{{ url_for('static', filename='images/dtf-logo.png') }}" alt="DTF Designs Logo" class="img-fluid mb-3" style="max-width: 400px; height: auto;">
+        </div>
+        <h1 class="mb-4 text-center">Admin Panel</h1>
+        
+        <!-- Business Management Features - TOP PRIORITY -->
+        <div class="alert alert-info mb-4">
+            <h4 class="alert-heading">🚀 Business Management System</h4>
+            <p class="mb-0">Comprehensive quote and order tracking system now active! View customer quotes, convert to orders, track production, and manage your entire business workflow.</p>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card border-primary h-100">
+                    <div class="card-body text-center">
+                        <h3 class="card-title text-primary">📋 Quote Management</h3>
+                        <p class="card-text">View customer quotes, generate PDFs, and convert to orders with full tracking.</p>
+                        <a href="{{ url_for('admin_quotes') }}" class="btn btn-primary btn-lg">Manage Quotes</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-success h-100">
+                    <div class="card-body text-center">
+                        <h3 class="card-title text-success">📦 Order Tracking</h3>
+                        <p class="card-text">Track orders through production, manage deadlines, and update customers.</p>
+                        <a href="{{ url_for('admin_orders') }}" class="btn btn-success btn-lg">Manage Orders</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-warning h-100" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    <div class="card-body text-center text-white">
+                        <h3 class="card-title">📊 Analytics Dashboard</h3>
+                        <p class="card-text">Real-time business insights, charts, trends, and performance metrics.</p>
+                        <a href="{{ url_for('admin_analytics') }}" class="btn btn-light btn-lg"><i class="fas fa-chart-line me-2"></i>View Analytics</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <hr class="my-4">
+        <h4 class="text-center mb-4 text-muted">System Configuration</h4>
+        
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">📦 Materials</h5>
+                        <p class="card-text">Manage print materials, set sizes and costs</p>
+                        <a href="{{ url_for('admin_materials') }}" class="btn btn-outline-primary">Manage Materials</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">🎯 Pricing Settings</h5>
+                        <p class="card-text">Adjust overhead, labor rates, and pricing</p>
+                        <a href="{{ url_for('admin_settings') }}" class="btn btn-outline-primary">Manage Settings</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">👕 Apparel Items</h5>
+                        <p class="card-text">Manage apparel products and tier pricing</p>
+                        <a href="{{ url_for('admin_apparel') }}" class="btn btn-outline-primary">Manage Apparel</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Yard Signs</h5>
+                        <p class="card-text">Manage yard sign products and pricing</p>
+                        <a href="{{ url_for('admin_yard_signs') }}" class="btn btn-primary">Manage Yard Signs</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Partner Categories</h5>
+                        <p class="card-text">Control which categories partners can access</p>
+                        <a href="{{ url_for('admin_partner_categories') }}" class="btn btn-primary">Manage Partner Access</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Customer Interface</h5>
+                        <p class="card-text">Return to customer pricing calculator</p>
+                        <a href="{{ url_for('customer') }}" class="btn btn-secondary">Customer Calculator</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Logout</h5>
+                        <p class="card-text">Sign out of admin panel</p>
+                        <a href="{{ url_for('admin_logout') }}" class="btn btn-outline-danger">Logout</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

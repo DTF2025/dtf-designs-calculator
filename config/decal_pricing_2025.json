@@ -1,0 +1,64 @@
+{
+  "spec_version": "2025.09.01",
+  "note": "Replace ALL existing decal pricing/lamination logic with this configuration and rules.",
+  "tiers_by_tba_sqft": [
+    {
+      "lt": 2,
+      "rate_sqft": 18.0
+    },
+    {
+      "lt": 5,
+      "rate_sqft": 13.0
+    },
+    {
+      "lt": 10,
+      "rate_sqft": 12.5
+    },
+    {
+      "lt": 25,
+      "rate_sqft": 12.0
+    },
+    {
+      "lt": 50,
+      "rate_sqft": 11.0
+    },
+    {
+      "lt": 1000000000.0,
+      "rate_sqft": 10.0
+    }
+  ],
+  "adders_sqft": {
+    "kiss_cut": 0.0,
+    "die_cut": 1.5,
+    "laminate_gloss": 2.0
+  },
+  "small_piece_fee_each": [
+    {
+      "min_side_in_lt": 1.0,
+      "fee": 0.1
+    },
+    {
+      "min_side_in_lt": 2.0,
+      "fee": 0.05
+    }
+  ],
+  "retail_job_minimum": 30.0,
+  "rounding": {
+    "unit_to": 0.05,
+    "total_to": 0.25
+  },
+  "partner_discount": 0.3,
+  "retail_margin_floor": 0.4,
+  "true_cost": {
+    "base_sqft": {
+      "gloss": 1.25,
+      "matte": 1.35
+    },
+    "cut_sqft": {
+      "kiss": 0.75,
+      "die": 1.5
+    },
+    "laminate_sqft": 2.0,
+    "fixed_per_job": 3.0
+  }
+}

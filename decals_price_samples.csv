@@ -1,0 +1,7 @@
+width_in,height_in,qty,material,cut,laminate,area_each_sqft,rate_sqft,unit_usd,total_usd
+4,4,25,gloss,kiss,none,0.1111,11.75,1.17,29.37
+4,4,25,gloss,kiss,gloss,0.1111,13.75,1.38,34.38
+4,4,25,gloss,die,none,0.1111,12.5,1.25,31.25
+6,6,10,matte,die,uv,0.25,15.5,3.88,38.75
+3,3,100,gloss,kiss,none,0.0625,11.75,0.59,58.75
+5,3,250,matte,kiss,matte,0.1042,14.25,1.11,278.32

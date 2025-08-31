@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>🔧 DTF Designs Employee Calculator</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        .fade-in { animation: fadeInUp 0.8s ease-out; }
+        .card { transition: all 0.3s ease; border: none; box-shadow: 0 8px 25px rgba(0,0,0,0.15); }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 15px 35px rgba(0,0,0,0.2); }
+        .btn { transition: all 0.3s ease; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .form-control:focus { transform: scale(1.02); box-shadow: 0 0 20px rgba(102, 102, 102, 0.3); }
+        .employee-hero { background: linear-gradient(135deg, #000000 0%, #333333 100%); padding: 3rem 0; margin: -2rem -15px 2rem -15px; border-bottom: 3px solid #666666; }
+        .price-highlight { animation: pulse 2s infinite; }
+        .employee-section { background: linear-gradient(135deg, #555555 0%, #333333 100%); border-radius: 20px; }
+        .glow { box-shadow: 0 0 30px rgba(102, 102, 102, 0.5); }
+        .profit-positive { color: #28a745; font-weight: bold; }
+        .profit-negative { color: #dc3545; font-weight: bold; }
+        .industry-comparison { background: linear-gradient(45deg, #444444, #222222); border-radius: 15px; padding: 20px; margin: 15px 0; }
+        .cost-breakdown { background: linear-gradient(45deg, #333333, #111111); border-radius: 15px; padding: 20px; margin: 15px 0; }
+    </style>
+</head>
+<body>
+    <div class="employee-hero text-center text-white">
+        <div class="container">
+            <div class="fade-in">
+                <img src="{{ url_for('static', filename='images/dtf-logo.png') }}" alt="DTF Designs Logo" class="img-fluid mb-3" style="max-width: 400px; height: auto; filter: drop-shadow(0 5px 15px rgba(0,0,0,0.3));">
+                <h1 class="display-4 fw-bold mb-3">🔧 Employee Calculator 🔧</h1>
+                <div class="badge bg-success text-white fs-6 px-3 py-2 mb-3">✅ BANNER PRICING FIXED - v2.1</div>
+                <div class="badge bg-warning text-dark fs-5 px-4 py-2 mb-3">⚡ Internal Cost Analysis & Profit Tracking ⚡</div>
+                <p class="lead mb-4">Cost breakdown, profit margins, and industry comparisons</p>
+                <div class="d-flex justify-content-center gap-3">
+                    <a href="/" class="btn btn-outline-light"><i class="fas fa-users"></i> Customer Calculator</a>
+                    <a href="{{ url_for('employee_logout') }}" class="btn btn-danger"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="container py-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% if error %}
+        <div class="alert alert-danger" role="alert">
+            <strong>Error:</strong> {{ error }}
+        </div>
+        {% endif %}
+
+        <div class="card employee-section glow fade-in">
+            <div class="card-body">
+                <h5 class="card-title text-white fw-bold"><i class="fas fa-calculator me-2"></i>Employee Price Calculator 💰</h5>
+                <form method="POST" id="quoteForm">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-12">
+                            <label for="category" class="form-label">Product Category</label>
+                            <select name="category" id="category" class="form-select" onchange="document.getElementById('quoteForm').submit()">
+                                {% for c in categories %}
+                                <option value="{{ c }}" {% if c == selected_category %}selected{% endif %}>{{ c }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    {% if selected_category in ['Banner', 'Decals', 'Poster'] %}
+                    {% if selected_category == 'Banner' %}
+                    <div class="banner-section">
+                        <h4 class="text-white mb-4"><i class="fas fa-flag me-2"></i>Vinyl Banners - Employee Cost View</h4>
+                        <p class="text-muted mb-3">Internal cost calculator showing true material costs for banners with hems + grommets.</p>
+                        
+                        <!-- Employee Cost Display -->
+                        <div class="pricing-info p-3 mb-4" style="background: #2a2a2a; border-radius: 8px; border-left: 4px solid #ffc107;">
+                            <h6 class="text-warning mb-2"><i class="fas fa-eye me-2"></i>True Cost Analysis</h6>
+                            <div class="row text-sm">
+                                <div class="col-md-8">
+                                    <small class="text-muted d-block">Base Material Cost:</small>
+                                    <small>All Quantities: <span class="text-warning">$0.80/sqft (ALPHA) • $0.86/sqft (JetFlex)</span> (material + overhead + labor)</small>
+                                </div>
+                                <div class="col-md-4">
+                                    <small class="text-muted d-block">Retail Markup:</small>
+                                    <small>Retail sells: <span class="text-info">$5.75-$3.95/sqft</span></small>
+                                </div>
+                            </div>
+                            <small class="text-muted d-block mt-2"><i class="fas fa-info-circle me-1"></i>Internal cost view - includes all production costs.</small>
+                        </div>
+                    
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label for="media_name" class="form-label">Banner Material</label>
+                            <select name="media_name" class="form-select">
+                                {% for media in media_names %}
+                                <option value="{{ media }}">{{ media }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Banner Size <small class="text-muted">(W×H)</small></label>
+                            <select class="form-select" id="employee-banner-size-select" onchange="updateEmployeeBannerSize()">
+                                <option value="custom">Custom Size...</option>
+                                <option value="24x12">2' × 1' (24"W × 12"H)</option>
+                                <option value="36x18">3' × 1.5' (36"W × 18"H)</option>
+                                <option value="48x24" selected>4' × 2' (48"W × 24"H)</option>
+                                <option value="72x24">6' × 2' (72"W × 24"H)</option>
+                                <option value="48x36">4' × 3' (48"W × 36"H)</option>
+                                <option value="72x36">6' × 3' (72"W × 36"H)</option>
+                                <option value="96x36">8' × 3' (96"W × 36"H)</option>
+                                <option value="72x48">6' × 4' (72"W × 48"H)</option>
+                                <option value="96x48">8' × 4' (96"W × 48"H)</option>
+                            </select>
+                            <small class="text-muted">Width × Height orientation</small>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <label for="width_in" class="form-label">Width (inches)</label>
+                            <input type="number" name="width_in" id="employee-custom-width" class="form-control" value="48" min="12" max="144" step="0.1">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="height_in" class="form-label">Height (inches)</label>
+                            <input type="number" name="height_in" id="employee-custom-height" class="form-control" value="24" min="12" max="144" step="0.1">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="qty" class="form-label">Quantity</label>
+                            <input type="number" step="1" min="1" name="qty" value="1" class="form-control" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="print_sides" class="form-label">Print Sides</label>
+                            <select name="print_sides" class="form-select">
+                                <option value="Single-sided">Single-sided</option>
+                                <option value="Double-sided">Double-sided</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <label for="ink_coverage" class="form-label">Ink Coverage</label>
+                            <select name="ink_coverage" class="form-select">
+                                <option value="Light">Light</option>
+                                <option value="Medium" selected>Medium</option>
+                                <option value="Heavy">Heavy</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="grommets" class="form-label">Grommets</label>
+                            <input type="number" name="grommets" class="form-control" value="8" min="0">
+                            <small class="text-muted">Recommended for hanging</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="turnaround" class="form-label">Production Time</label>
+                            <select name="turnaround" class="form-select">
+                                <option value="Standard (3-5 days)" selected>Standard (3-5 days)</option>
+                                <option value="Rush (1-2 days)">Rush (1-2 days)</option>
+                            </select>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if selected_category == "Decals" %}
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="media_name" class="form-label">Vinyl Material</label>
+                            <select name="media_name" class="form-select" required>
+                                <option value="gloss_vinyl">Gloss Vinyl</option>
+                                <option value="matte_vinyl">Matte Vinyl</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="width_in" class="form-label">Width (inches)</label>
+                            <input type="number" step="0.01" name="width_in" value="4" class="form-control" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="height_in" class="form-label">Height (inches)</label>
+                            <input type="number" step="0.01" name="height_in" value="4" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <label for="qty" class="form-label">Quantity</label>
+                            <input type="number" step="1" min="1" name="qty" value="25" class="form-control" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="cut_type" class="form-label">Cut Type</label>
+                            <select name="cut_type" class="form-select" required>
+                                <option value="kiss" selected>Kiss-Cut (+$0.75/sq ft)</option>
+                                <option value="die">Die-Cut (+$1.50/sq ft)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="laminate_name" class="form-label">Protective Laminate</label>
+                            <select name="laminate_name" class="form-select">
+                                <option value="" selected>None</option>
+                                <option value="gloss">Gloss Laminate (+$2.00/sq ft)</option>
+                                <option value="matte">Matte Laminate (+$2.00/sq ft)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="rush" class="form-label">Production Time</label>
+                            <select name="rush" class="form-select">
+                                <option value="Standard" selected>Standard (3-5 days)</option>
+                                <option value="Rush">Rush (1-2 days) +25%</option>
+                            </select>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if selected_category not in ['Banner', 'Decals', 'Poster', 'Apparel'] %}
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label for="media_name" class="form-label">Material</label>
+                            <select name="media_name" class="form-select">
+                                {% for media in media_names %}
+                                <option value="{{ media }}">{{ media }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="width_in" class="form-label">Width (inches)</label>
+                            <input type="number" name="width_in" class="form-control" value="24" min="1" step="0.1">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="height_in" class="form-label">Height (inches)</label>
+                            <input type="number" name="height_in" class="form-control" value="48" min="1" step="0.1">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <label for="qty" class="form-label">Quantity</label>
+                            <input type="number" name="qty" class="form-control" value="1" min="1">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="print_sides" class="form-label">Print Sides</label>
+                            <select name="print_sides" class="form-select">
+                                <option value="Single-sided">Single-sided</option>
+                                <option value="Double-sided">Double-sided</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="ink_coverage" class="form-label">Ink Coverage</label>
+                            <select name="ink_coverage" class="form-select">
+                                <option value="Light">Light</option>
+                                <option value="Medium" selected>Medium</option>
+                                <option value="Heavy">Heavy</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="turnaround" class="form-label">Production Time</label>
+                            <select name="turnaround" class="form-select">
+                                <option value="Standard (3-5 days)" selected>Standard (3-5 days)</option>
+                                <option value="Rush (1-2 days)">Rush (1-2 days)</option>
+                            </select>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endif %}
+
+                    {% if selected_category == 'Banner' %}
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label for="hemming" class="form-label">Hemming</label>
+                            <select name="hemming" class="form-select">
+                                <option value="None">None</option>
+                                <option value="Top Only">Top Only</option>
+                                <option value="All Sides">All Sides</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="grommets" class="form-label">Total Grommets</label>
+                            <input type="number" name="grommets" class="form-control" value="0" min="0">
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if selected_category == 'Apparel' %}
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-12">
+                            <label class="form-label">Apparel Items</label>
+                            <div id="apparelItems"></div>
+                            <button type="button" class="btn btn-outline-light btn-sm mt-2" onclick="addApparelItem()">
+                                <i class="fas fa-plus"></i> Add Item
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="rush" class="form-label">Production Time</label>
+                            <select name="rush" class="form-select">
+                                <option value="Standard" selected>Standard (3-5 days)</option>
+                                <option value="Rush">Rush (1-2 days) +20%</option>
+                            </select>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-12">
+                            <label for="special_instructions" class="form-label">Special Instructions (Optional)</label>
+                            <textarea name="special_instructions" class="form-control" rows="2" placeholder="Tell us about your project, colors, deadline, etc..."></textarea>
+                        </div>
+                    </div>
+
+                    <div class="text-center">
+                        <button type="submit" class="btn btn-primary btn-lg px-5">
+                            <i class="fas fa-calculator me-2"></i>Calculate Employee Quote
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if result %}
+        <div class="mt-4">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card bg-dark border-success fade-in">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Employee Analysis</h5>
+                        </div>
+                        <div class="card-body">
+                            {% if result and result.totals %}
+                            <div class="cost-breakdown">
+                                <h6 class="text-warning mb-3"><i class="fas fa-eye me-2"></i>Cost Breakdown - FIXED</h6>
+                                <div class="row mb-2">
+                                    <div class="col-6">True Cost:</div>
+                                    <div class="col-6 text-end text-danger fw-bold">${{ result.employee_analysis.true_cost }}</div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-6">Customer Price:</div>
+                                    <div class="col-6 text-end text-info fw-bold">${{ result.employee_analysis.customer_price }}</div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-6">Partner Price (30% off):</div>
+                                    <div class="col-6 text-end text-warning fw-bold">${{ result.employee_analysis.partner_price }}</div>
+                                </div>
+                                <hr class="border-secondary">
+                                <div class="row mb-2">
+                                    <div class="col-6">Customer Profit:</div>
+                                    <div class="col-6 text-end profit-positive">${{ result.employee_analysis.profit_amount }} ({{ result.employee_analysis.profit_margin_percent }}%)</div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-6">Partner Profit:</div>
+                                    <div class="col-6 text-end text-warning">${{ result.employee_analysis.partner_profit }} ({{ result.employee_analysis.partner_profit_margin }}%)</div>
+                                </div>
+                            </div>
+
+                            <div class="industry-comparison">
+                                <h6 class="text-info mb-3"><i class="fas fa-industry me-2"></i>Industry Standard Comparison</h6>
+                                <div class="row mb-2">
+                                    <div class="col-8">Industry Range:</div>
+                                    <div class="col-4 text-end text-warning">${{ result.employee_analysis.industry_standard_low }} - ${{ result.employee_analysis.industry_standard_high }}</div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-8">vs. Low End:</div>
+                                    <div class="col-4 text-end {% if result.employee_analysis.vs_industry_low >= 0 %}profit-positive{% else %}profit-negative{% endif %}">
+                                        ${{ result.employee_analysis.vs_industry_low }}
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-8">vs. High End:</div>
+                                    <div class="col-4 text-end {% if result.employee_analysis.vs_industry_high >= 0 %}profit-positive{% else %}profit-negative{% endif %}">
+                                        ${{ result.employee_analysis.vs_industry_high }}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="card bg-dark border-primary fade-in">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0"><i class="fas fa-receipt me-2"></i>Customer Quote</h5>
+                        </div>
+                        <div class="card-body">
+                            {% if result.totals %}
+                            <div class="row mb-2">
+                                <div class="col-6">Total Area:</div>
+                                <div class="col-6 text-end">{{ result.derived.billable_sqft }} sq ft</div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-6">Unit Price:</div>
+                                <div class="col-6 text-end">${{ result.totals.unit_price }}</div>
+                            </div>
+                            <hr class="border-secondary">
+                            <div class="row">
+                                <div class="col-6"><strong>Total Price:</strong></div>
+                                <div class="col-6 text-end price-highlight">
+                                    <span class="fs-4 fw-bold text-success">${{ result.totals.quoted_price }}</span>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        // Apparel item management (same as customer calculator)
+        const garments = {{ apparel_garments|tojson }};
+        const sizes = {{ size_options|tojson }};
+        let itemIndex = 0;
+
+        function createSelectOptions(list) {
+            return list.map(v => `<option value="${v}">${v}</option>`).join('');
+        }
+
+        function addApparelItem() {
+            const container = document.getElementById('apparelItems');
+            const itemHTML = `
+                <div class="row g-2 mb-2 apparel-item" id="item-${itemIndex}">
+                    <div class="col-md-4">
+                        <select name="items-${itemIndex}-garment" class="form-select form-select-sm">
+                            ${createSelectOptions(garments)}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <select name="items-${itemIndex}-size" class="form-select form-select-sm">
+                            ${createSelectOptions(sizes)}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <input name="items-${itemIndex}-qty" type="number" min="1" value="12" class="form-control form-control-sm" placeholder="Qty">
+                    </div>
+                    <div class="col-md-2">
+                        <input name="items-${itemIndex}-extras" type="number" min="0" value="0" class="form-control form-control-sm" placeholder="Extra designs">
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeApparelItem(${itemIndex})">Remove</button>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', itemHTML);
+            itemIndex++;
+        }
+
+        function removeApparelItem(index) {
+            const element = document.getElementById(`item-${index}`);
+            if (element) {
+                element.remove();
+            }
+        }
+
+        // Add initial apparel item if in apparel category
+        {% if selected_category == "Apparel" %}
+        addApparelItem();
+        {% endif %}
+        
+        // Employee Banner Size Selection Function
+        function updateEmployeeBannerSize() {
+            const sizeSelect = document.getElementById('employee-banner-size-select');
+            const widthInput = document.getElementById('employee-custom-width');
+            const heightInput = document.getElementById('employee-custom-height');
+            
+            if (sizeSelect && sizeSelect.value !== 'custom') {
+                const [width, height] = sizeSelect.value.split('x');
+                widthInput.value = width;
+                heightInput.value = height;
+            }
+        }
+        
+    </script>
+</body>
+</html>

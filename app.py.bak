@@ -1,0 +1,2557 @@
+import os
+import math
+import logging
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify, make_response
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import DeclarativeBase
+from pdf_generator import PDFQuoteGenerator
+from analytics import BusinessAnalytics as AnalyticsService
+from file_upload import FileUploadHandler
+from openai import OpenAI
+from config import CONFIG
+
+# Import centralized pricing functions for API endpoints
+from scripts.pricers import (
+    banner_quote_with_guard, 
+    banner_employee_cost,
+    decal_quote_with_guard,
+    decal_employee_cost, 
+    poster_quote_with_guard,
+    poster_employee_cost
+)
+
+# Professional Banner Pricing - Using external banner_pricing.py module
+
+logging.basicConfig(level=logging.DEBUG)
+
+# Banner pricing is now handled directly in calculate_area_pricing function
+
+# Initialize OpenAI client
+openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+class Base(DeclarativeBase):
+    pass
+
+db = SQLAlchemy(model_class=Base)
+
+app = Flask(__name__)
+app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key")
+
+# Database configuration
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "pool_recycle": 300,
+    "pool_pre_ping": True,
+}
+db.init_app(app)
+
+# Database Models
+class Material(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    material_type = db.Column(db.String(50), nullable=False)  # banner, laminate
+    width_inches = db.Column(db.Float, nullable=False)
+    length_feet = db.Column(db.Float, nullable=False)
+    total_cost = db.Column(db.Float, nullable=False)
+    cost_per_sqft = db.Column(db.Float, nullable=False)
+    active = db.Column(db.Boolean, default=True)
+
+class PricingSettings(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    setting_name = db.Column(db.String(50), nullable=False, unique=True)
+    value = db.Column(db.Float, nullable=False)
+    description = db.Column(db.String(200))
+
+class ApparelItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    garment_name = db.Column(db.String(50), nullable=False)
+    tier_1_5 = db.Column(db.Float, nullable=False)
+    tier_6_10 = db.Column(db.Float, nullable=False)
+    tier_11_20 = db.Column(db.Float, nullable=False)
+    tier_21_50 = db.Column(db.Float, nullable=False)
+    tier_51_100 = db.Column(db.Float, nullable=False)
+    tier_101_plus = db.Column(db.Float, nullable=False)
+    active = db.Column(db.Boolean, default=True)
+
+class YardSignItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    sku = db.Column(db.String(50), nullable=False)
+    blank_cost = db.Column(db.Float, nullable=False)
+    print_cost = db.Column(db.Float, nullable=False)
+    stake_cost = db.Column(db.Float, nullable=False)
+    retail_price = db.Column(db.Float, nullable=False)
+    active = db.Column(db.Boolean, default=True)
+
+class PartnerCategorySettings(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    category_name = db.Column(db.String(50), nullable=False, unique=True)
+    enabled_for_partners = db.Column(db.Boolean, default=True)
+    description = db.Column(db.String(200))
+
+# Advanced Business Models
+class Customer(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(120), nullable=False)
+    phone = db.Column(db.String(20))
+    company = db.Column(db.String(100))
+    address = db.Column(db.Text)
+    customer_type = db.Column(db.String(20), default='retail')  # retail, partner
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+    total_orders = db.Column(db.Integer, default=0)
+    total_spent = db.Column(db.Float, default=0.0)
+    
+    # Relationships
+    quotes = db.relationship('Quote', backref='customer', lazy=True)
+    orders = db.relationship('Order', backref='customer', lazy=True)
+
+class Quote(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    quote_number = db.Column(db.String(20), unique=True, nullable=False)
+    customer_id = db.Column(db.Integer, db.ForeignKey('customer.id'), nullable=False)
+    
+    # Quote details
+    category = db.Column(db.String(50), nullable=False)
+    product_details = db.Column(db.JSON)  # Store all form data as JSON
+    calculated_price = db.Column(db.Float, nullable=False)
+    cost_breakdown = db.Column(db.JSON)  # Store cost details
+    
+    # Status and dates
+    status = db.Column(db.String(20), default='pending')  # pending, approved, declined, converted
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+    expires_at = db.Column(db.DateTime)
+    
+    # Admin notes
+    notes = db.Column(db.Text)
+    admin_adjustments = db.Column(db.Float, default=0.0)
+    final_price = db.Column(db.Float)
+    
+    # Communication
+    email_sent = db.Column(db.Boolean, default=False)
+    pdf_generated = db.Column(db.Boolean, default=False)
+    
+    # Relationships
+    order = db.relationship('Order', backref='quote', uselist=False)
+    files = db.relationship('QuoteFile', backref='quote', lazy=True)
+
+class Order(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    order_number = db.Column(db.String(20), unique=True, nullable=False)
+    quote_id = db.Column(db.Integer, db.ForeignKey('quote.id'), nullable=False)
+    customer_id = db.Column(db.Integer, db.ForeignKey('customer.id'), nullable=False)
+    
+    # Order status
+    status = db.Column(db.String(20), default='confirmed')  # confirmed, in_production, ready, completed, cancelled
+    priority = db.Column(db.String(10), default='standard')  # standard, rush
+    
+    # Dates
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+    due_date = db.Column(db.DateTime)
+    completed_at = db.Column(db.DateTime)
+    
+    # Production details
+    production_notes = db.Column(db.Text)
+    estimated_completion = db.Column(db.DateTime)
+    
+    # Payments (future expansion)
+    total_amount = db.Column(db.Float, nullable=False)
+    deposit_amount = db.Column(db.Float, default=0.0)
+    balance_due = db.Column(db.Float)
+    payment_status = db.Column(db.String(20), default='pending')  # pending, partial, paid
+    
+    # Communication
+    customer_notified = db.Column(db.Boolean, default=False)
+    sms_notifications = db.Column(db.Boolean, default=False)
+
+class QuoteFile(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    quote_id = db.Column(db.Integer, db.ForeignKey('quote.id'), nullable=False)
+    filename = db.Column(db.String(255), nullable=False)
+    original_filename = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(500), nullable=False)
+    file_size = db.Column(db.Integer)
+    file_type = db.Column(db.String(50))
+    uploaded_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+    description = db.Column(db.String(255))
+
+class BusinessAnalytics(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.Date, nullable=False)
+    metric_name = db.Column(db.String(50), nullable=False)
+    metric_value = db.Column(db.Float, nullable=False)
+    category = db.Column(db.String(50))
+    additional_data = db.Column(db.JSON)
+
+# Initialize database and default data
+with app.app_context():
+    db.create_all()
+    
+    # Initialize default settings if they don't exist
+    if not PricingSettings.query.first():
+        default_settings = [
+            PricingSettings(setting_name='equipment_overhead_per_sqft', value=0.32, description='Equipment overhead cost per square foot'),
+            PricingSettings(setting_name='grommet_cost_each', value=0.09788, description='Cost per grommet'),
+            PricingSettings(setting_name='tape_cost_per_ft', value=0.36978, description='Hemming tape cost per foot'),
+            PricingSettings(setting_name='ink_cost_per_ml', value=0.71, description='Ink cost per milliliter'),
+            PricingSettings(setting_name='cleaning_allowance_ml', value=0.05, description='Cleaning allowance per ml of ink'),
+            PricingSettings(setting_name='labor_rate_per_hr', value=13.0, description='Labor rate per hour'),
+            PricingSettings(setting_name='setup_fee_default', value=25.0, description='Default setup fee'),
+            PricingSettings(setting_name='banner_retail_rate', value=8.0, description='Retail rate per sqft for banners'),
+            PricingSettings(setting_name='coverage_light', value=0.8, description='Light ink coverage ml per sqft'),
+            PricingSettings(setting_name='coverage_medium', value=1.2, description='Medium ink coverage ml per sqft'),
+            PricingSettings(setting_name='coverage_heavy', value=1.6, description='Heavy ink coverage ml per sqft'),
+            PricingSettings(setting_name='retail_markup_multiplier', value=2.5, description='Retail markup multiplier over cost'),
+        ]
+        for setting in default_settings:
+            db.session.add(setting)
+        
+        # Add default materials
+        default_materials = [
+            Material(name='Ultraflex JetFlex FL Gloss 13oz', material_type='banner', 
+                    width_inches=54, length_feet=164, total_cost=520.0, cost_per_sqft=0.2286),
+            Material(name='Avery DOL 1360Z Gloss Laminate', material_type='laminate',
+                    width_inches=54, length_feet=150, total_cost=760.0, cost_per_sqft=0.7595),
+            Material(name='Avery DOL 1460Z Matte Laminate', material_type='laminate',
+                    width_inches=54, length_feet=150, total_cost=790.0, cost_per_sqft=0.7895),
+        ]
+        for material in default_materials:
+            db.session.add(material)
+        
+        # Add default apparel items
+        default_apparel = [
+            ApparelItem(garment_name='T-Shirt', tier_1_5=25, tier_6_10=22, tier_11_20=19, tier_21_50=17, tier_51_100=16, tier_101_plus=14),
+            ApparelItem(garment_name='Tank Top', tier_1_5=23, tier_6_10=20, tier_11_20=18, tier_21_50=16, tier_51_100=15, tier_101_plus=13),
+            ApparelItem(garment_name='Long-Sleeve Tee', tier_1_5=30, tier_6_10=27, tier_11_20=24, tier_21_50=22, tier_51_100=20, tier_101_plus=18),
+            ApparelItem(garment_name='Crewneck Sweat', tier_1_5=35, tier_6_10=32, tier_11_20=29, tier_21_50=27, tier_51_100=25, tier_101_plus=23),
+            ApparelItem(garment_name='Pullover Hoodie', tier_1_5=38, tier_6_10=35, tier_11_20=31, tier_21_50=29, tier_51_100=27, tier_101_plus=25),
+            ApparelItem(garment_name='Zip Hoodie', tier_1_5=42, tier_6_10=37, tier_11_20=33, tier_21_50=31, tier_51_100=29, tier_101_plus=27),
+        ]
+        for apparel in default_apparel:
+            db.session.add(apparel)
+        
+        # Add default yard sign
+        default_yard_sign = YardSignItem(
+            name='Coroplast Yard Sign 18x24 (Double-Sided)',
+            sku='YS_18x24_4mm',
+            blank_cost=2.25,
+            print_cost=2.50,
+            stake_cost=0.45,
+            retail_price=14.00
+        )
+        db.session.add(default_yard_sign)
+        
+        # Add default partner category settings
+        if not PartnerCategorySettings.query.first():
+            default_categories = [
+                PartnerCategorySettings(category_name='Apparel', enabled_for_partners=True, description='DTF printing on apparel'),
+                PartnerCategorySettings(category_name='Banner', enabled_for_partners=True, description='Wide format banner printing'),
+                PartnerCategorySettings(category_name='Decals', enabled_for_partners=True, description='Vinyl decal printing'),
+                PartnerCategorySettings(category_name='Poster', enabled_for_partners=True, description='Poster printing'),
+                PartnerCategorySettings(category_name='Yard Signs', enabled_for_partners=True, description='Coroplast yard signs'),
+            ]
+            for category_setting in default_categories:
+                db.session.add(category_setting)
+        
+        db.session.commit()
+
+def get_setting(setting_name, default=0.0):
+    """Get a pricing setting value"""
+    setting = PricingSettings.query.filter_by(setting_name=setting_name).first()
+    return setting.value if setting else default
+
+# Advanced Quote Management Functions
+import secrets
+import string
+from datetime import datetime, timedelta
+
+def generate_quote_number():
+    """Generate unique quote number"""
+    prefix = datetime.now().strftime("%Y%m")
+    random_suffix = ''.join(secrets.choice(string.digits) for _ in range(4))
+    quote_number = f"Q{prefix}{random_suffix}"
+    
+    # Ensure uniqueness
+    while Quote.query.filter_by(quote_number=quote_number).first():
+        random_suffix = ''.join(secrets.choice(string.digits) for _ in range(4))
+        quote_number = f"Q{prefix}{random_suffix}"
+    
+    return quote_number
+
+def generate_order_number():
+    """Generate unique order number"""
+    prefix = datetime.now().strftime("%Y%m")
+    random_suffix = ''.join(secrets.choice(string.digits) for _ in range(4))
+    order_number = f"O{prefix}{random_suffix}"
+    
+    # Ensure uniqueness
+    while Order.query.filter_by(order_number=order_number).first():
+        random_suffix = ''.join(secrets.choice(string.digits) for _ in range(4))
+        order_number = f"O{prefix}{random_suffix}"
+    
+    return order_number
+
+def find_or_create_customer(email, name, phone=None, company=None, customer_type='retail'):
+    """Find existing customer or create new one"""
+    customer = Customer.query.filter_by(email=email).first()
+    
+    if not customer:
+        customer = Customer(
+            name=name,
+            email=email,
+            phone=phone,
+            company=company,
+            customer_type=customer_type
+        )
+        db.session.add(customer)
+        db.session.commit()
+    else:
+        # Update customer info if provided
+        if name and customer.name != name:
+            customer.name = name
+        if phone and customer.phone != phone:
+            customer.phone = phone
+        if company and customer.company != company:
+            customer.company = company
+        db.session.commit()
+    
+    return customer
+
+def save_quote(customer, category, form_data, calculated_price, cost_breakdown, customer_type='retail'):
+    """Save quote to database"""
+    quote_number = generate_quote_number()
+    
+    # Set expiration date (30 days from now)
+    expires_at = datetime.now() + timedelta(days=30)
+    
+    # Determine final price (same as calculated for now)
+    final_price = calculated_price
+    
+    quote = Quote(
+        quote_number=quote_number,
+        customer_id=customer.id,
+        category=category,
+        product_details=dict(form_data),  # Convert to dict for JSON storage
+        calculated_price=calculated_price,
+        cost_breakdown=cost_breakdown,
+        expires_at=expires_at,
+        final_price=final_price,
+        status='pending'
+    )
+    
+    db.session.add(quote)
+    db.session.commit()
+    
+    return quote
+
+def track_analytics(metric_name, value, category=None, additional_data=None):
+    """Track business analytics"""
+    today = datetime.now().date()
+    
+    # Check if metric already exists for today
+    existing = BusinessAnalytics.query.filter_by(
+        date=today,
+        metric_name=metric_name,
+        category=category
+    ).first()
+    
+    if existing:
+        existing.metric_value += value
+        if additional_data:
+            if existing.additional_data:
+                existing.additional_data.update(additional_data)
+            else:
+                existing.additional_data = additional_data
+    else:
+        analytics = BusinessAnalytics(
+            date=today,
+            metric_name=metric_name,
+            metric_value=value,
+            category=category,
+            additional_data=additional_data or {}
+        )
+        db.session.add(analytics)
+    
+    db.session.commit()
+
+def calculate_area_pricing(form_data):
+    """Calculate pricing for area-based products (Wide Format, Stickers)"""
+    try:
+        # Extract form data
+        width_in = float(form_data.get('width_in', 0))
+        height_in = float(form_data.get('height_in', 0))
+        qty = int(form_data.get('qty', 1))
+        sides = int(form_data.get('sides', 1))
+        coverage = form_data.get('coverage', 'Medium')
+        hem_opt = form_data.get('hem_opt', 'None')
+        num_grommets = int(form_data.get('grommets', 0))  # Now using direct number of grommets
+        laminate_name = form_data.get('laminate_name', form_data.get('laminate', ''))
+        media_name = form_data.get('media_name', '')
+        customer_type = form_data.get('customer_type', 'retail')
+        category = form_data.get('category', 'Wide Format')
+        
+        # Calculate billable area first
+        billable_sqft = (width_in * height_in / 144) * qty * sides
+        
+        # Default labor time based on category and size
+        if category in ['Decals'] and billable_sqft <= 2:  # Small decals get minimal labor
+            default_labor = 10  # 10 minutes for small decals
+            setup_fee_on = False  # No setup fee for small decals
+        else:
+            default_labor = 30  # 30 minutes for larger items  
+            setup_fee_on = form_data.get('setup_fee_on', 'Yes') == 'Yes'
+        
+        labor_minutes = int(form_data.get('labor_minutes', default_labor))
+        
+        # Calculate costs
+        costs = {}
+        
+        # Media cost - skip database lookup for banners and decals (handled separately)
+        if category in ['Banner', 'Decals']:
+            costs['media_cost'] = 0.0  # Will be calculated in pricing section
+        else:
+            # Get media information from database for non-banner categories
+            media = Material.query.filter_by(name=media_name, active=True).first()
+            if not media:
+                raise ValueError(f"Media not found: {media_name}")
+            costs['media_cost'] = billable_sqft * media.cost_per_sqft
+        
+        # Equipment overhead
+        costs['equipment_overhead'] = billable_sqft * get_setting('equipment_overhead_per_sqft', 1.31)
+        
+        # Ink cost
+        coverage_options = {
+            'Light': get_setting('coverage_light', 0.8),
+            'Medium': get_setting('coverage_medium', 1.2),
+            'Heavy': get_setting('coverage_heavy', 1.6)
+        }
+        coverage_ml = coverage_options.get(coverage, 1.2)
+        ink_ml_needed = billable_sqft * coverage_ml
+        ink_cost_per_ml = get_setting('ink_cost_per_ml', 0.71)
+        costs['ink_cost'] = ink_ml_needed * ink_cost_per_ml
+        
+        # Cleaning allowance
+        costs['cleaning_allowance'] = ink_ml_needed * get_setting('cleaning_allowance_ml', 0.05)
+        
+        # Labor cost
+        labor_hours = labor_minutes / 60
+        costs['labor_cost'] = labor_hours * get_setting('labor_rate_per_hr', 13.0)
+        
+        # Setup fee
+        costs['setup_fee'] = get_setting('setup_fee_default', 25.0) if setup_fee_on else 0
+        
+        # Hemming cost
+        costs['hem_cost'] = 0
+        if hem_opt != 'None':
+            perimeter_ft = 2 * (width_in + height_in) / 12 * qty
+            if hem_opt == 'Top&Bottom':
+                perimeter_ft = 2 * width_in / 12 * qty
+            costs['hem_cost'] = perimeter_ft * get_setting('tape_cost_per_ft', 0.37)
+        
+        # Grommet cost
+        costs['grommet_cost'] = 0
+        if num_grommets > 0:
+            costs['grommet_cost'] = num_grommets * get_setting('grommet_cost_each', 0.098)
+        
+        # Laminate cost
+        costs['laminate_cost'] = 0
+        if laminate_name:
+            # Check both vinyl_laminate and cast_laminate types
+            laminate_media = Material.query.filter(
+                Material.name == laminate_name,
+                Material.material_type.in_(['vinyl_laminate', 'cast_laminate']),
+                Material.active == True
+            ).first()
+            if laminate_media:
+                costs['laminate_cost'] = billable_sqft * laminate_media.cost_per_sqft
+        
+        # Total cost
+        your_cost = sum(costs.values())
+        
+        # Calculate retail pricing - Banner uses NEW SYSTEM, others use old
+        category = form_data.get('category', 'Banner')
+        
+        if category == 'Decals':
+            # PROFESSIONAL DECALS PRICING - Canton, OH strategy
+            width_ft = width_in / 12
+            height_ft = height_in / 12
+            area_sqft = width_ft * height_ft
+            rush = form_data.get('rush', 'Standard') == 'Rush'
+            
+            # Get quantity rate
+            if qty >= 1000:
+                rate = 4.25
+            elif qty >= 500:
+                rate = 4.75
+            elif qty >= 250:
+                rate = 5.50
+            elif qty >= 100:
+                rate = 6.50
+            elif qty >= 50:
+                rate = 7.50
+            elif qty >= 25:
+                rate = 9.00
+            elif qty >= 10:
+                rate = 9.50
+            else:
+                rate = 10.00
+            
+            # Cut type adders
+            cut_adder = 0.75  # Kiss-cut default
+            if form_data.get('cut_type') == 'die':
+                cut_adder = 1.50  # Die-cut
+            
+            # Lamination adder
+            lamination_adder = 0.0
+            if form_data.get('laminate_name'):  # If lamination selected
+                lamination_adder = 2.00
+            
+            # Small piece fees (for tiny decals)
+            small_piece_fee = 0.0
+            min_edge = min(width_in, height_in)
+            if min_edge < 1.0:
+                small_piece_fee = 0.10
+            elif min_edge < 2.0:
+                small_piece_fee = 0.05
+            
+            # Calculate base price (just quantity rate)
+            base_unit_price = (area_sqft * rate) + small_piece_fee
+            
+            # Apply minimum to base price only
+            base_total = base_unit_price * qty
+            if base_total < 35.0:
+                base_unit_price = 35.0 / qty
+            
+            # NOW add cut type and lamination adders (so differences are always visible)
+            unit_price = base_unit_price + (area_sqft * cut_adder) + (area_sqft * lamination_adder)
+            
+            # Rush fee
+            if rush:
+                unit_price *= 1.25
+            
+            # Apply customer discounts
+            if customer_type == 'partner':
+                unit_price *= 0.70  # 30% off
+            elif customer_type == 'employee':
+                # Employee sees TRUE COST using proper cost calculation system
+                from scripts.pricers import true_cost_decal
+                
+                # Map form data to true_cost function parameters
+                material_map = {
+                    'gloss_vinyl': 'eco_gloss',
+                    'matte_vinyl': 'eco_matte'
+                }
+                material = material_map.get(form_data.get('media_name', 'gloss_vinyl'), 'eco_gloss')
+                
+                cut_type_map = {
+                    'kiss': 'kiss',
+                    'die': 'die'
+                }
+                cut_type = cut_type_map.get(form_data.get('cut_type', 'kiss'), 'kiss')
+                
+                laminated = bool(form_data.get('laminate_name'))
+                
+                # Calculate true cost using proper system
+                unit_cost, total_cost = true_cost_decal(
+                    width_in, height_in, qty,
+                    material=material,
+                    cut_type=cut_type,
+                    laminated=laminated,
+                    intricate=False
+                )
+                
+                unit_price = unit_cost
+            
+            quoted_price = unit_price * qty
+        elif category == 'Banner':
+            # SIMPLE BANNER PRICING - Canton, OH strategy
+            width_ft = width_in / 12
+            height_ft = height_in / 12
+            area_sqft = width_ft * height_ft
+            rush = form_data.get('rush', 'Standard') == 'Rush'
+            
+            # Add waste buffer
+            if area_sqft <= 15:
+                billable_area = area_sqft + 1.0
+            elif area_sqft <= 30:
+                billable_area = area_sqft + 1.5
+            else:
+                billable_area = area_sqft + 2.0
+            
+            # Get quantity rate
+            if qty >= 100:
+                rate = 3.95
+            elif qty >= 50:
+                rate = 4.25
+            elif qty >= 25:
+                rate = 4.50
+            elif qty >= 10:
+                rate = 4.85
+            elif qty >= 5:
+                rate = 5.25
+            else:
+                rate = 5.75
+            
+            # Calculate base price
+            unit_price = billable_area * rate
+            
+            # Material addon
+            if form_data.get('media_name') == 'jetflex':
+                unit_price += billable_area * 0.25  # +$0.25/sqft for JetFlex
+            
+            # Double-sided
+            if sides == 2:
+                unit_price *= 1.8
+            
+            # Rush
+            if rush:
+                unit_price *= 1.25
+            
+            retail_unit_price = unit_price  # keep retail math intact for Customer Quote
+
+            # --- Employee true cost (no waste, no job min) ---
+            area_sqft = (width_inches/12.0) * (height_inches/12.0)  # or width_ft*height_ft if you already have feet
+            per_sqft_cost = 0.17 + 0.18 + 0.25 + 0.20  # = 0.80 (ALPHA)
+            fixed_cost = 0.60 + 4.00                   # finishing fixed + setup+packaging
+            employee_unit_cost = area_sqft * per_sqft_cost + fixed_cost
+
+            # If you need to display partner/employee prices, derive them from retail:
+            if customer_type == 'partner':
+                unit_price = retail_unit_price * 0.70
+            else:
+                unit_price = retail_unit_price
+            
+            quoted_price = unit_price * qty
+        else:
+            # Other categories use old markup system
+            if customer_type == 'partner':
+                # Partner gets 30% off cost + finishing
+                quoted_price = your_cost * 0.70  # 30% discount
+            else:
+                # Customer gets retail markup over cost + finishing - use category-specific markup
+                if category in ['Decals', 'Poster']:
+                    markup_multiplier = get_setting('decal_markup_multiplier', 2.8)
+                else:
+                    markup_multiplier = get_setting('retail_markup_multiplier', 2.5)
+                quoted_price = your_cost * markup_multiplier
+        
+        # Unit price
+        unit_price = quoted_price / qty if qty > 0 else 0
+        
+        return {
+            'totals': {
+                'your_cost': round(your_cost, 2),
+                'quoted_price': round(quoted_price, 2),
+                'unit_price': round(unit_price, 2)
+            },
+            'costs': {k: round(v, 2) for k, v in costs.items()},
+            'derived': {
+                'billable_sqft': round(billable_sqft, 2)
+            }
+        }
+        
+    except Exception as e:
+        raise ValueError(f"Calculation error: {str(e)}")
+
+def calculate_yard_signs(form_data):
+    """Calculate pricing for yard signs"""
+    try:
+        sku = form_data.get('per_unit_sku', '')
+        qty = int(form_data.get('qty', 1))
+        add_stakes = form_data.get('add_stakes', 'No') == 'Yes'
+        
+        # Get yard sign item from database
+        item = YardSignItem.query.filter_by(sku=sku, active=True).first()
+        if not item:
+            raise ValueError(f"Yard sign item not found: {sku}")
+        
+        # Calculate costs
+        costs = {}
+        costs['blank_cost'] = item.blank_cost * qty
+        costs['print_cost'] = item.print_cost * qty
+        
+        if add_stakes:
+            costs['stake_cost'] = item.stake_cost * qty
+        else:
+            costs['stake_cost'] = 0
+        
+        your_cost = sum(costs.values())
+        
+        # Base retail price (customer always gets retail price)
+        quoted_price = item.retail_price * qty
+        
+        # Unit price
+        unit_price = quoted_price / qty if qty > 0 else 0
+        
+        return {
+            'totals': {
+                'your_cost': round(your_cost, 2),
+                'quoted_price': round(quoted_price, 2),
+                'unit_price': round(unit_price, 2)
+            },
+            'costs': {k: round(v, 2) for k, v in costs.items()}
+        }
+        
+    except Exception as e:
+        raise ValueError(f"Yard signs calculation error: {str(e)}")
+
+def get_apparel_tier_price(garment_name, qty):
+    """Get price for apparel based on quantity tier"""
+    apparel_item = ApparelItem.query.filter_by(garment_name=garment_name, active=True).first()
+    if not apparel_item:
+        return 0
+    
+    if qty >= 101:
+        return apparel_item.tier_101_plus
+    elif qty >= 51:
+        return apparel_item.tier_51_100
+    elif qty >= 21:
+        return apparel_item.tier_21_50
+    elif qty >= 11:
+        return apparel_item.tier_11_20
+    elif qty >= 6:
+        return apparel_item.tier_6_10
+    else:
+        return apparel_item.tier_1_5
+
+def calculate_apparel(form_data):
+    """Calculate pricing for apparel"""
+    try:
+        rush = form_data.get('rush', 'Standard') == 'Rush'
+        
+        # Parse apparel items
+        items = []
+        i = 0
+        while f'items-{i}-garment' in form_data:
+            garment = form_data.get(f'items-{i}-garment', '')
+            size = form_data.get(f'items-{i}-size', 'M')
+            qty = int(form_data.get(f'items-{i}-qty', 0))
+            extras = int(form_data.get(f'items-{i}-extras', 0))
+            
+            if garment and qty > 0:
+                items.append({
+                    'garment': garment,
+                    'size': size,
+                    'qty': qty,
+                    'extras': extras
+                })
+            i += 1
+        
+        if not items:
+            raise ValueError("No apparel items specified")
+        
+        # Calculate totals by garment type
+        garment_totals = {}
+        for item in items:
+            garment = item['garment']
+            if garment not in garment_totals:
+                garment_totals[garment] = 0
+            garment_totals[garment] += item['qty']
+        
+        # Calculate pricing for each item
+        lines = []
+        total_cost = 0
+        
+        for item in items:
+            garment = item['garment']
+            size = item['size']
+            qty = item['qty']
+            extras = item['extras']
+            
+            # Get base price from tier
+            total_qty_for_garment = garment_totals[garment]
+            base_price = get_apparel_tier_price(garment, total_qty_for_garment)
+            
+            # Add size addon
+            size_addons = {'2XL': 2, '3XL': 3, '4XL': 4, '5XL': 5}
+            size_addon = size_addons.get(size, 0)
+            
+            # Add extra placement cost
+            extra_placement_cost = extras * 4.0  # $4 per extra placement
+            
+            # Calculate unit price
+            unit_price = base_price + size_addon + (extra_placement_cost / qty if qty > 0 else 0)
+            
+            # Apply rush multiplier (20% increase)
+            if rush:
+                unit_price *= 1.20
+            
+            line_total = unit_price * qty
+            total_cost += line_total
+            
+            lines.append({
+                'garment': garment,
+                'size': size,
+                'qty': qty,
+                'unit': round(unit_price, 2),
+                'total': round(line_total, 2)
+            })
+        
+        # Customer always gets retail price (no discount)
+        quoted_price = total_cost
+        
+        # For apparel, assume 40% markup from cost to retail
+        your_cost = total_cost * 0.6
+        
+        # Calculate average unit price
+        total_qty = sum(item['qty'] for item in items)
+        unit_price = quoted_price / total_qty if total_qty > 0 else 0
+        
+        return {
+            'totals': {
+                'your_cost': round(your_cost, 2),
+                'quoted_price': round(quoted_price, 2),
+                'unit_price': round(unit_price, 2)
+            },
+            'lines': lines
+        }
+        
+    except Exception as e:
+        raise ValueError(f"Apparel calculation error: {str(e)}")
+
+@app.route('/', methods=['GET', 'POST'])
+def customer():
+    """Customer-facing comprehensive quote interface"""
+    error = None
+    result = None
+    
+    # Get available categories
+    categories = ['Apparel', 'Banner', 'Decals', 'Poster', 'Yard Signs']
+    selected_category = request.form.get('category', categories[0])
+    
+    # Get media names from database based on category
+    if selected_category == 'Banner':
+        # Simple banner materials
+        material_options = [('alpha', 'ALPHA Premium Matte Frontlit Banner 13oz'), ('jetflex', 'JetFlex® FL Gloss White 13oz')]
+        media_names = ['alpha', 'jetflex']
+    elif selected_category == 'Decals':
+        # Decals category shows all vinyl materials (cast_vinyl + vinyl + decal)
+        materials = Material.query.filter(
+            Material.material_type.in_(['cast_vinyl', 'vinyl', 'decal']),
+            Material.active == True
+        ).all()
+        media_names = [material.name for material in materials]
+        material_options = [(material.name, material.cost_per_sqft) for material in materials]
+    elif selected_category == 'Poster':
+        materials = Material.query.filter_by(material_type='poster', active=True).all()
+        media_names = [material.name for material in materials]
+        material_options = [(material.name, material.cost_per_sqft) for material in materials]
+    else:
+        materials = Material.query.filter_by(material_type='banner', active=True).all()  # Default to banner
+        media_names = [material.name for material in materials]
+        material_options = [(material.name, material.cost_per_sqft) for material in materials]
+    
+    # Get all material types for dropdown selection
+    all_materials = Material.query.filter_by(active=True).all()
+    material_types = {}
+    for material in all_materials:
+        if material.material_type not in material_types:
+            material_types[material.material_type] = []
+        material_types[material.material_type].append(material.name)
+    
+    # Get laminate options from database (both types)
+    vinyl_laminates = Material.query.filter_by(material_type='vinyl_laminate', active=True).all()
+    cast_laminates = Material.query.filter_by(material_type='cast_laminate', active=True).all()
+    laminate_options = [lam.name for lam in vinyl_laminates + cast_laminates]
+    # Create laminate options with pricing for dropdown
+    laminate_options_with_pricing = [(lam.name, lam.cost_per_sqft) for lam in vinyl_laminates + cast_laminates]
+    
+    # Get coverage levels
+    coverage_levels = ['Light', 'Medium', 'Heavy']
+    
+    # Get yard sign items from database
+    yard_items = YardSignItem.query.filter_by(active=True).all()
+    
+    # Get apparel garments from database
+    apparel_items = ApparelItem.query.filter_by(active=True).all()
+    apparel_garments = [item.garment_name for item in apparel_items]
+    
+    # Size options for apparel
+    size_options = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL']
+    
+    form_data = {}
+    if request.method == 'POST':
+        try:
+            # Force customer type to retail for all customer quotes
+            form_data = dict(request.form)
+            form_data['customer_type'] = 'retail'
+            
+            # Check if required fields are filled for each category
+            # If not, just show the form without trying to calculate
+            should_calculate = True
+            
+            if selected_category in ['Banner', 'Decals', 'Poster']:
+                if not form_data.get('media_name'):
+                    should_calculate = False
+            elif selected_category == 'Apparel':
+                # Check if any apparel items were added
+                has_apparel_items = False
+                for key in form_data:
+                    if key.startswith('items-') and key.endswith('-garment'):
+                        has_apparel_items = True
+                        break
+                if not has_apparel_items:
+                    should_calculate = False
+            elif selected_category == 'Yard Signs':
+                if not form_data.get('per_unit_sku'):
+                    should_calculate = False
+            
+            if not should_calculate:
+                # Just show the form without errors
+                pass
+            else:
+                # Set defaults for area-based categories
+                if selected_category in ['Banner', 'Decals']:
+                    if 'labor_minutes' not in form_data:
+                        form_data['labor_minutes'] = '30'
+                    if 'setup_fee_on' not in form_data:
+                        form_data['setup_fee_on'] = 'Yes'
+                
+                # Calculate based on category
+                if selected_category in ['Banner', 'Decals']:
+                    result = calculate_area_pricing(form_data)
+                elif selected_category == 'Poster':
+                    result = calculate_area_pricing(form_data)
+                elif selected_category == 'Yard Signs':
+                    result = calculate_yard_signs(form_data)
+                elif selected_category == 'Apparel':
+                    result = calculate_apparel(form_data)
+                else:
+                    raise ValueError(f"Unknown category: {selected_category}")
+                
+                # Track analytics for successful quote calculations
+                if result:
+                    track_analytics('quotes_generated', 1, selected_category, {
+                        'price': result['totals']['quoted_price'],
+                        'customer_type': 'retail'
+                    })
+                    
+                    # Handle quote saving if requested
+                    if form_data.get('save_quote') == 'yes':
+                        customer_name = form_data.get('customer_name', '').strip()
+                        customer_email = form_data.get('customer_email', '').strip()
+                        
+                        if customer_name and customer_email:
+                            # Create or find customer
+                            customer = find_or_create_customer(
+                                email=customer_email,
+                                name=customer_name,
+                                phone=form_data.get('customer_phone', '').strip(),
+                                company=form_data.get('customer_company', '').strip(),
+                                customer_type='retail'
+                            )
+                            
+                            # Save the quote
+                            saved_quote = save_quote(
+                                customer=customer,
+                                category=selected_category,
+                                form_data=form_data,
+                                calculated_price=result['totals']['quoted_price'],
+                                cost_breakdown=result.get('breakdown', {}),
+                                customer_type='retail'
+                            )
+                            
+                            # Store quote info for display
+                            result.quote_saved = True
+                            result.quote_number = saved_quote.quote_number
+                            result.customer_name = customer_name
+                            
+                            # Track quote save analytics
+                            track_analytics('quotes_saved', 1, selected_category, {
+                                'quote_number': saved_quote.quote_number,
+                                'customer_id': customer.id
+                            })
+                        else:
+                            # Add validation error but don't break the quote calculation
+                            if not hasattr(result, 'warnings'):
+                                result.warnings = []
+                            result.warnings.append("Name and email are required to save quotes")
+                
+        except Exception as e:
+            error = str(e)
+    
+    return render_template('customer.html',
+                         error=error,
+                         result=result,
+                         categories=categories,
+                         selected_category=selected_category,
+                         media_names=media_names,
+                         material_options=material_options,
+                         laminate_options=laminate_options,
+                         laminate_options_with_pricing=laminate_options_with_pricing,
+                         coverage_levels=coverage_levels,
+                         yard_items=yard_items,
+                         apparel_garments=apparel_garments,
+                         size_options=size_options,
+                         form_data=form_data)
+
+def admin_required(f):
+    """Decorator to require admin authentication"""
+    def decorated(*args, **kwargs):
+        if not session.get('admin_authenticated'):
+            return redirect(url_for('admin_login'))
+        return f(*args, **kwargs)
+    decorated.__name__ = f.__name__
+    return decorated
+
+def partner_required(f):
+    """Decorator to require partner authentication"""
+    def decorated(*args, **kwargs):
+        if not session.get('partner_authenticated'):
+            return redirect(url_for('partner_login'))
+        return f(*args, **kwargs)
+    decorated.__name__ = f.__name__
+    return decorated
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    """Admin login page"""
+    if request.method == 'POST':
+        password = request.form.get('password')
+        if password == '941063':
+            session['admin_authenticated'] = True
+            flash('Login successful!', 'success')
+            return redirect(url_for('admin_home'))
+        else:
+            flash('Incorrect password. Please try again.', 'error')
+    
+    return render_template('admin_login.html')
+
+@app.route('/admin/logout')
+def admin_logout():
+    """Admin logout"""
+    session.pop('admin_authenticated', None)
+    flash('Logged out successfully', 'success')
+    return redirect(url_for('customer'))
+
+@app.route('/partner/login', methods=['GET', 'POST'])
+def partner_login():
+    """Partner login page"""
+    if request.method == 'POST':
+        password = request.form.get('password')
+        if password == 'ohio25':
+            session['partner_authenticated'] = True
+            flash('Partner login successful!', 'success')
+            return redirect(url_for('partner_calculator'))
+        else:
+            flash('Incorrect password. Please try again.', 'error')
+    
+    return render_template('partner_login.html')
+
+@app.route('/partner/logout')
+def partner_logout():
+    """Partner logout"""
+    session.pop('partner_authenticated', None)
+    flash('Logged out successfully', 'success')
+    return redirect(url_for('customer'))
+
+@app.route('/admin')
+@admin_required
+def admin_home():
+    """Admin home page"""
+    return render_template('admin.html')
+
+@app.route('/admin/materials')
+@admin_required
+def admin_materials():
+    """Manage materials"""
+    materials = Material.query.filter_by(active=True).all()
+    return render_template('admin_materials.html', materials=materials)
+
+@app.route('/admin/materials/add', methods=['GET', 'POST'])
+@admin_required
+def admin_add_material():
+    """Add new material"""
+    if request.method == 'POST':
+        try:
+            name = request.form['name']
+            material_type = request.form['material_type']
+            width_inches = float(request.form['width_inches'])
+            length_feet = float(request.form['length_feet'])
+            total_cost = float(request.form['total_cost'])
+            
+            # Auto-calculate cost per sqft
+            total_sqft = (width_inches * length_feet) / 12
+            cost_per_sqft = total_cost / total_sqft if total_sqft > 0 else 0
+            
+            material = Material(
+                name=name,
+                material_type=material_type,
+                width_inches=width_inches,
+                length_feet=length_feet,
+                total_cost=total_cost,
+                cost_per_sqft=cost_per_sqft
+            )
+            
+            db.session.add(material)
+            db.session.commit()
+            flash(f'Material "{name}" added successfully! Cost per sq ft: ${cost_per_sqft:.4f}', 'success')
+            return redirect(url_for('admin_materials'))
+            
+        except Exception as e:
+            flash(f'Error adding material: {str(e)}', 'error')
+    
+    return render_template('admin_add_material.html')
+
+@app.route('/admin/materials/edit/<int:material_id>', methods=['GET', 'POST'])
+@admin_required
+def admin_edit_material(material_id):
+    """Edit existing material"""
+    material = Material.query.get_or_404(material_id)
+    
+    if request.method == 'POST':
+        try:
+            material.name = request.form['name']
+            material.material_type = request.form['material_type']
+            material.width_inches = float(request.form['width_inches'])
+            material.length_feet = float(request.form['length_feet'])
+            material.total_cost = float(request.form['total_cost'])
+            
+            # Auto-calculate cost per sqft
+            total_sqft = (material.width_inches * material.length_feet) / 12
+            material.cost_per_sqft = material.total_cost / total_sqft if total_sqft > 0 else 0
+            
+            db.session.commit()
+            flash(f'Material "{material.name}" updated successfully! Cost per sq ft: ${material.cost_per_sqft:.4f}', 'success')
+            return redirect(url_for('admin_materials'))
+            
+        except Exception as e:
+            flash(f'Error updating material: {str(e)}', 'error')
+    
+    return render_template('admin_edit_material.html', material=material)
+
+@app.route('/admin/materials/delete/<int:material_id>')
+@admin_required
+def admin_delete_material(material_id):
+    """Delete material (mark as inactive)"""
+    material = Material.query.get_or_404(material_id)
+    material.active = False
+    db.session.commit()
+    flash(f'Material "{material.name}" deleted successfully', 'success')
+    return redirect(url_for('admin_materials'))
+
+@app.route('/admin/settings')
+@admin_required
+def admin_settings():
+    """Manage pricing settings"""
+    settings = PricingSettings.query.all()
+    return render_template('admin_settings.html', settings=settings)
+
+@app.route('/admin/settings/edit/<int:setting_id>', methods=['GET', 'POST'])
+@admin_required
+def admin_edit_setting(setting_id):
+    """Edit pricing setting"""
+    setting = PricingSettings.query.get_or_404(setting_id)
+    
+    if request.method == 'POST':
+        try:
+            setting.value = float(request.form['value'])
+            setting.description = request.form['description']
+            
+            db.session.commit()
+            flash(f'Setting "{setting.setting_name}" updated successfully', 'success')
+            return redirect(url_for('admin_settings'))
+            
+        except Exception as e:
+            flash(f'Error updating setting: {str(e)}', 'error')
+    
+    return render_template('admin_edit_setting.html', setting=setting)
+
+@app.route('/admin/apparel')
+@admin_required
+def admin_apparel():
+    """Manage apparel items"""
+    apparel_items = ApparelItem.query.filter_by(active=True).all()
+    return render_template('admin_apparel.html', apparel_items=apparel_items)
+
+@app.route('/admin/apparel/add', methods=['GET', 'POST'])
+@admin_required
+def admin_add_apparel():
+    """Add new apparel item"""
+    if request.method == 'POST':
+        try:
+            apparel = ApparelItem(
+                garment_name=request.form['garment_name'],
+                tier_1_5=float(request.form['tier_1_5']),
+                tier_6_10=float(request.form['tier_6_10']),
+                tier_11_20=float(request.form['tier_11_20']),
+                tier_21_50=float(request.form['tier_21_50']),
+                tier_51_100=float(request.form['tier_51_100']),
+                tier_101_plus=float(request.form['tier_101_plus'])
+            )
+            
+            db.session.add(apparel)
+            db.session.commit()
+            flash(f'Apparel item "{apparel.garment_name}" added successfully', 'success')
+            return redirect(url_for('admin_apparel'))
+            
+        except Exception as e:
+            flash(f'Error adding apparel item: {str(e)}', 'error')
+    
+    return render_template('admin_add_apparel.html')
+
+@app.route('/admin/yard-signs')
+@admin_required
+def admin_yard_signs():
+    """Manage yard sign items"""
+    yard_signs = YardSignItem.query.filter_by(active=True).all()
+    return render_template('admin_yard_signs.html', yard_signs=yard_signs)
+
+@app.route('/admin/yard-signs/add', methods=['GET', 'POST'])
+@admin_required
+def admin_add_yard_sign():
+    """Add new yard sign item"""
+    if request.method == 'POST':
+        try:
+            yard_sign = YardSignItem(
+                name=request.form['name'],
+                sku=request.form['sku'],
+                blank_cost=float(request.form['blank_cost']),
+                print_cost=float(request.form['print_cost']),
+                stake_cost=float(request.form['stake_cost']),
+                retail_price=float(request.form['retail_price'])
+            )
+            
+            db.session.add(yard_sign)
+            db.session.commit()
+            flash(f'Yard sign "{yard_sign.name}" added successfully', 'success')
+            return redirect(url_for('admin_yard_signs'))
+            
+        except Exception as e:
+            flash(f'Error adding yard sign: {str(e)}', 'error')
+    
+    return render_template('admin_add_yard_sign.html')
+
+@app.route('/admin/partner-categories')
+@admin_required
+def admin_partner_categories():
+    """Manage partner category settings"""
+    categories = PartnerCategorySettings.query.all()
+    return render_template('admin_partner_categories.html', categories=categories)
+
+@app.route('/admin/partner-categories/toggle/<int:category_id>')
+@admin_required
+def admin_toggle_partner_category(category_id):
+    """Toggle partner category enabled/disabled"""
+    category = PartnerCategorySettings.query.get_or_404(category_id)
+    category.enabled_for_partners = not category.enabled_for_partners
+    db.session.commit()
+    
+    status = "enabled" if category.enabled_for_partners else "disabled"
+    flash(f'Category "{category.category_name}" {status} for partners', 'success')
+    return redirect(url_for('admin_partner_categories'))
+
+# Advanced Business Management Routes
+@app.route('/admin/quotes')
+@admin_required
+def admin_quotes():
+    """Admin interface for viewing and managing quotes"""
+    # Get filter parameters
+    status_filter = request.args.get('status', 'all')
+    category_filter = request.args.get('category', 'all')
+    search_query = request.args.get('search', '')
+    
+    # Build query
+    query = Quote.query
+    
+    if status_filter != 'all':
+        query = query.filter(Quote.status == status_filter)
+    
+    if category_filter != 'all':
+        query = query.filter(Quote.category == category_filter)
+    
+    if search_query:
+        query = query.join(Customer).filter(
+            db.or_(
+                Quote.quote_number.contains(search_query),
+                Customer.name.contains(search_query),
+                Customer.email.contains(search_query),
+                Customer.company.contains(search_query)
+            )
+        )
+    
+    # Order by newest first
+    quotes = query.order_by(Quote.created_at.desc()).all()
+    
+    # Get summary statistics
+    total_quotes = Quote.query.count()
+    pending_quotes = Quote.query.filter_by(status='pending').count()
+    approved_quotes = Quote.query.filter_by(status='approved').count()
+    converted_quotes = Quote.query.filter_by(status='converted').count()
+    
+    # Calculate total pending value
+    pending_value = db.session.query(db.func.sum(Quote.calculated_price)).filter_by(status='pending').scalar() or 0
+    
+    return render_template('admin_quotes.html', 
+                         quotes=quotes,
+                         status_filter=status_filter,
+                         category_filter=category_filter,
+                         search_query=search_query,
+                         total_quotes=total_quotes,
+                         pending_quotes=pending_quotes,
+                         approved_quotes=approved_quotes,
+                         converted_quotes=converted_quotes,
+                         pending_value=pending_value)
+
+@app.route('/admin/quote/<quote_number>')
+@admin_required
+def admin_quote_detail(quote_number):
+    """View detailed quote information"""
+    quote = Quote.query.filter_by(quote_number=quote_number).first_or_404()
+    return render_template('admin_quote_detail.html', quote=quote)
+
+@app.route('/admin/quote/<quote_number>/update_status', methods=['POST'])
+@admin_required
+def admin_update_quote_status(quote_number):
+    """Update quote status"""
+    quote = Quote.query.filter_by(quote_number=quote_number).first_or_404()
+    
+    new_status = request.form.get('status')
+    admin_notes = request.form.get('admin_notes', '').strip()
+    price_adjustment = request.form.get('price_adjustment', '0')
+    
+    try:
+        price_adjustment = float(price_adjustment) if price_adjustment else 0.0
+    except ValueError:
+        price_adjustment = 0.0
+    
+    # Update quote
+    quote.status = new_status
+    if admin_notes:
+        quote.notes = admin_notes
+    quote.admin_adjustments = price_adjustment
+    quote.final_price = quote.calculated_price + price_adjustment
+    
+    db.session.commit()
+    
+    # Track status change
+    track_analytics('quote_status_changed', 1, quote.category, {
+        'quote_number': quote_number,
+        'new_status': new_status,
+        'price_adjustment': price_adjustment
+    })
+    
+    flash(f'Quote {quote_number} updated successfully!', 'success')
+    return redirect(url_for('admin_quote_detail', quote_number=quote_number))
+
+@app.route('/admin/quote/<quote_number>/convert_to_order', methods=['POST'])
+@admin_required
+def admin_convert_to_order(quote_number):
+    """Convert quote to order"""
+    quote = Quote.query.filter_by(quote_number=quote_number).first_or_404()
+    
+    if quote.status == 'converted':
+        flash('Quote is already converted to an order!', 'warning')
+        return redirect(url_for('admin_quote_detail', quote_number=quote_number))
+    
+    # Generate order number
+    order_number = generate_order_number()
+    
+    # Get form data
+    priority = request.form.get('priority', 'standard')
+    production_notes = request.form.get('production_notes', '').strip()
+    due_date_str = request.form.get('due_date', '')
+    
+    # Parse due date
+    due_date = None
+    if due_date_str:
+        try:
+            due_date = datetime.strptime(due_date_str, '%Y-%m-%d')
+        except ValueError:
+            pass
+    
+    # Create order
+    order = Order(
+        order_number=order_number,
+        quote_id=quote.id,
+        customer_id=quote.customer_id,
+        priority=priority,
+        due_date=due_date,
+        production_notes=production_notes,
+        total_amount=quote.final_price or quote.calculated_price,
+        balance_due=quote.final_price or quote.calculated_price
+    )
+    
+    db.session.add(order)
+    
+    # Update quote status
+    quote.status = 'converted'
+    
+    # Update customer stats
+    quote.customer.total_orders += 1
+    quote.customer.total_spent += order.total_amount
+    
+    db.session.commit()
+    
+    # Track conversion
+    track_analytics('quotes_converted', 1, quote.category, {
+        'quote_number': quote_number,
+        'order_number': order_number,
+        'order_value': order.total_amount
+    })
+    
+    flash(f'Quote {quote_number} converted to Order {order_number}!', 'success')
+    return redirect(url_for('admin_order_detail', order_number=order_number))
+
+@app.route('/admin/orders')
+@admin_required  
+def admin_orders():
+    """Admin interface for viewing and managing orders"""
+    # Get filter parameters
+    status_filter = request.args.get('status', 'all')
+    priority_filter = request.args.get('priority', 'all')
+    search_query = request.args.get('search', '')
+    
+    # Build query
+    query = Order.query
+    
+    if status_filter != 'all':
+        query = query.filter(Order.status == status_filter)
+    
+    if priority_filter != 'all':
+        query = query.filter(Order.priority == priority_filter)
+    
+    if search_query:
+        query = query.join(Customer).filter(
+            db.or_(
+                Order.order_number.contains(search_query),
+                Customer.name.contains(search_query),
+                Customer.email.contains(search_query)
+            )
+        )
+    
+    # Order by newest first
+    orders = query.order_by(Order.created_at.desc()).all()
+    
+    # Get summary statistics
+    total_orders = Order.query.count()
+    confirmed_orders = Order.query.filter_by(status='confirmed').count()
+    in_production = Order.query.filter_by(status='in_production').count()
+    ready_orders = Order.query.filter_by(status='ready').count()
+    completed_orders = Order.query.filter_by(status='completed').count()
+    
+    # Calculate total order value
+    total_value = db.session.query(db.func.sum(Order.total_amount)).scalar() or 0
+    
+    return render_template('admin_orders.html',
+                         orders=orders,
+                         status_filter=status_filter,
+                         priority_filter=priority_filter,
+                         search_query=search_query,
+                         total_orders=total_orders,
+                         confirmed_orders=confirmed_orders,
+                         in_production=in_production,
+                         ready_orders=ready_orders,
+                         completed_orders=completed_orders,
+                         total_value=total_value)
+
+@app.route('/admin/order/<order_number>')
+@admin_required
+def admin_order_detail(order_number):
+    """View detailed order information"""
+    order = Order.query.filter_by(order_number=order_number).first_or_404()
+    return render_template('admin_order_detail.html', order=order)
+
+@app.route('/admin/order/<order_number>/update_status', methods=['POST'])
+@admin_required
+def admin_update_order_status(order_number):
+    """Update order status"""
+    order = Order.query.filter_by(order_number=order_number).first_or_404()
+    
+    new_status = request.form.get('status')
+    production_notes = request.form.get('production_notes', '').strip()
+    estimated_completion_str = request.form.get('estimated_completion', '')
+    
+    # Parse estimated completion
+    estimated_completion = None
+    if estimated_completion_str:
+        try:
+            estimated_completion = datetime.strptime(estimated_completion_str, '%Y-%m-%dT%H:%M')
+        except ValueError:
+            try:
+                estimated_completion = datetime.strptime(estimated_completion_str, '%Y-%m-%d')
+            except ValueError:
+                pass
+    
+    # Update order
+    order.status = new_status
+    if production_notes:
+        order.production_notes = production_notes
+    if estimated_completion:
+        order.estimated_completion = estimated_completion
+    
+    # Set completion date if status is completed
+    if new_status == 'completed' and not order.completed_at:
+        order.completed_at = datetime.now()
+    
+    db.session.commit()
+    
+    # Track status change
+    track_analytics('order_status_changed', 1, order.quote.category, {
+        'order_number': order_number,
+        'new_status': new_status
+    })
+    
+    flash(f'Order {order_number} updated successfully!', 'success')
+    return redirect(url_for('admin_order_detail', order_number=order_number))
+
+@app.route('/partner', methods=['GET', 'POST'])
+@partner_required
+def partner_calculator():
+    """Partner calculator with wholesale pricing (20% discount)"""
+    error = None
+    result = None
+    
+    # Get available categories (filtered for partners)
+    partner_settings = PartnerCategorySettings.query.filter_by(enabled_for_partners=True).all()
+    categories = [setting.category_name for setting in partner_settings]
+    
+    # Fallback to all categories if none enabled
+    if not categories:
+        categories = ['Banner', 'Decals', 'Poster']  # Safe defaults
+    
+    selected_category = request.form.get('category', categories[0])
+    
+    # Get media names from database based on category
+    if selected_category == 'Banner':
+        # Simple banner materials
+        material_options = [('alpha', 'ALPHA Premium Matte Frontlit Banner 13oz'), ('jetflex', 'JetFlex® FL Gloss White 13oz')]
+        media_names = ['alpha', 'jetflex']
+    elif selected_category == 'Decals':
+        # Decals category shows all vinyl materials (cast_vinyl + vinyl + decal)
+        materials = Material.query.filter(
+            Material.material_type.in_(['cast_vinyl', 'vinyl', 'decal']),
+            Material.active == True
+        ).all()
+        media_names = [material.name for material in materials]
+        material_options = [(material.name, material.cost_per_sqft) for material in materials]
+    elif selected_category == 'Poster':
+        materials = Material.query.filter_by(material_type='poster', active=True).all()
+        media_names = [material.name for material in materials]
+        material_options = [(material.name, material.cost_per_sqft) for material in materials]
+    else:
+        materials = Material.query.filter_by(material_type='banner', active=True).all()  # Default to banner
+        media_names = [material.name for material in materials]
+        material_options = [(material.name, material.cost_per_sqft) for material in materials]
+    
+    # Get all material types for dropdown selection
+    all_materials = Material.query.filter_by(active=True).all()
+    material_types = {}
+    for material in all_materials:
+        if material.material_type not in material_types:
+            material_types[material.material_type] = []
+        material_types[material.material_type].append(material.name)
+    
+    # Get laminate options from database (both types)
+    vinyl_laminates = Material.query.filter_by(material_type='vinyl_laminate', active=True).all()
+    cast_laminates = Material.query.filter_by(material_type='cast_laminate', active=True).all()
+    laminate_options = [lam.name for lam in vinyl_laminates + cast_laminates]
+    # Create laminate options with pricing for dropdown
+    laminate_options_with_pricing = [(lam.name, lam.cost_per_sqft) for lam in vinyl_laminates + cast_laminates]
+    
+    # Get coverage levels
+    coverage_levels = ['Light', 'Medium', 'Heavy']
+    
+    # Get apparel garments
+    apparel_items = ApparelItem.query.filter_by(active=True).all()
+    apparel_garments = [item.garment_name for item in apparel_items]
+    size_options = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL']
+    
+    # Get yard sign items
+    yard_items = YardSignItem.query.filter_by(active=True).all()
+    
+    if request.method == 'POST':
+        try:
+            # Force customer type to retail for all partner quotes (before discount)
+            form_data = dict(request.form)
+            form_data['customer_type'] = 'retail'
+            
+            # Check if required fields are filled for each category
+            # If not, just show the form without trying to calculate
+            should_calculate = True
+            
+            if selected_category in ['Banner', 'Decals', 'Poster']:
+                if not form_data.get('media_name'):
+                    should_calculate = False
+            elif selected_category == 'Apparel':
+                # Check if any apparel items were added
+                has_apparel_items = False
+                for key in form_data:
+                    if key.startswith('items-') and key.endswith('-garment'):
+                        has_apparel_items = True
+                        break
+                if not has_apparel_items:
+                    should_calculate = False
+            elif selected_category == 'Yard Signs':
+                if not form_data.get('yard_sign_name'):
+                    should_calculate = False
+            
+            if not should_calculate:
+                # Just show the form without errors
+                pass
+            else:
+                if selected_category == 'Apparel':
+                    result = calculate_apparel(form_data)
+                elif selected_category in ['Banner', 'Decals', 'Poster']:
+                    # Set default values like customer route
+                    if 'labor_minutes' not in form_data:
+                        form_data['labor_minutes'] = '30'
+                    if 'setup_fee_on' not in form_data:
+                        form_data['setup_fee_on'] = 'Yes'
+                    result = calculate_area_pricing(form_data)
+                elif selected_category == 'Yard Signs':
+                    result = calculate_yard_signs(form_data)
+            
+            # Apply 30% special discount and add suggested retail price
+            if result:
+                if 'total_cost' in result:
+                    result['original_cost'] = result['total_cost']
+                    result['partner_discount'] = 30
+                    result['total_cost'] = result['total_cost'] * 0.70  # 30% discount
+                    result['savings'] = result['original_cost'] - result['total_cost']
+                    # Add suggested retail price (10% markup above original for competitive retail)
+                    result['suggested_retail'] = result['original_cost'] * 1.10
+                elif 'totals' in result and 'quoted_price' in result['totals']:
+                    # DISABLED: Partner discount should not apply to employee calculator
+                    # This was overriding the correct employee cost calculation
+                    pass
+                
+        except Exception as e:
+            logging.error(f"Error calculating partner quote: {str(e)}")
+            error = f"Error calculating quote: {str(e)}"
+    
+    return render_template('partner_calculator.html',
+                         error=error,
+                         result=result,
+                         categories=categories,
+                         selected_category=selected_category,
+                         media_names=media_names,
+                         material_options=material_options,
+                         laminate_options=laminate_options,
+                         laminate_options_with_pricing=laminate_options_with_pricing,
+                         coverage_levels=coverage_levels,
+                         yard_items=yard_items,
+                         apparel_garments=apparel_garments,
+                         apparel_items=apparel_items,
+                         size_options=size_options,
+                         form_data=request.form if request.method == 'POST' else {})
+
+# Initialize services
+pdf_generator = PDFQuoteGenerator()
+analytics_service = AnalyticsService(db)
+file_handler = FileUploadHandler()
+
+# ========================
+# ANALYTICS DASHBOARD ROUTES
+# ========================
+
+@app.route('/admin/analytics')
+def admin_analytics():
+    """Show comprehensive analytics dashboard with REAL data"""
+    try:
+        # Get REAL stats from database
+        total_quotes = Quote.query.count()
+        total_orders = Order.query.count() 
+        total_customers = Customer.query.count()
+        
+        # This month stats
+        from datetime import datetime, timedelta
+        today = datetime.now().date()
+        this_month_start = today.replace(day=1)
+        this_month_quotes = Quote.query.filter(Quote.created_at >= this_month_start).count()
+        this_month_orders = Order.query.filter(Order.created_at >= this_month_start).count()
+        
+        # Revenue calculations - REAL data
+        all_quotes = Quote.query.all()
+        total_revenue = 0
+        this_month_revenue = 0
+        approved_count = 0
+        
+        for quote in all_quotes:
+            price = quote.final_price or quote.calculated_price or 0
+            if quote.status == 'approved':
+                total_revenue += price
+                approved_count += 1
+            if quote.created_at.date() >= this_month_start and quote.status == 'approved':
+                this_month_revenue += price
+        
+        # Conversion rate and averages
+        conversion_rate = (approved_count / total_quotes * 100) if total_quotes > 0 else 0
+        avg_order_value = total_revenue / approved_count if approved_count > 0 else 0
+        
+        stats = {
+            'total_quotes': total_quotes,
+            'total_orders': total_orders,
+            'total_customers': total_customers,
+            'this_month_quotes': this_month_quotes,
+            'this_month_orders': this_month_orders,
+            'total_revenue': round(total_revenue, 2),
+            'this_month_revenue': round(this_month_revenue, 2),
+            'conversion_rate': round(conversion_rate, 1),
+            'avg_order_value': round(avg_order_value, 2)
+        }
+        
+        # Real daily stats (last 7 days)
+        daily_quotes = []
+        daily_orders = []
+        daily_revenue = []
+        
+        for i in range(7):
+            day = today - timedelta(days=6-i)
+            day_quotes = Quote.query.filter(Quote.created_at.date() == day).count()
+            day_orders = Order.query.filter(Order.created_at.date() == day).count()
+            day_rev = sum((q.final_price or q.calculated_price or 0) 
+                         for q in Quote.query.filter(Quote.created_at.date() == day, Quote.status == 'approved').all())
+            
+            daily_quotes.append((day.strftime('%Y-%m-%d'), day_quotes))
+            daily_orders.append((day.strftime('%Y-%m-%d'), day_orders))
+            daily_revenue.append((day.strftime('%Y-%m-%d'), round(day_rev, 2)))
+        
+        daily_stats = {
+            'quotes': daily_quotes,
+            'orders': daily_orders,
+            'revenue': daily_revenue
+        }
+        
+        # Real category breakdown
+        categories = ['Banner', 'Apparel', 'Decals', 'Yard Signs', 'Other']
+        category_counts = []
+        category_values = []
+        
+        for cat in categories:
+            cat_quotes = Quote.query.filter(Quote.category == cat).all()
+            count = len(cat_quotes)
+            value = sum((q.final_price or q.calculated_price or 0) for q in cat_quotes if q.status == 'approved')
+            category_counts.append(count)
+            category_values.append(round(value, 2))
+        
+        category_breakdown = {
+            'categories': categories,
+            'counts': category_counts,
+            'values': category_values
+        }
+        
+        # Real customer insights
+        customers = Customer.query.all()
+        top_customers = []
+        
+        for customer in customers:
+            customer_quotes = Quote.query.filter_by(customer_id=customer.id).all()
+            total_spent = sum((q.final_price or q.calculated_price or 0) 
+                            for q in customer_quotes if q.status == 'approved')
+            if total_spent > 0:  # Only show customers who have spent money
+                top_customers.append({
+                    'name': customer.name,
+                    'email': customer.email,
+                    'total_spent': round(total_spent, 2),
+                    'quote_count': len(customer_quotes)
+                })
+        
+        # Sort by total spent and take top 5
+        top_customers.sort(key=lambda x: x['total_spent'], reverse=True)
+        top_customers = top_customers[:5]
+        
+        customer_insights = {
+            'top_customers': top_customers,
+            'customer_types': {'retail': total_customers}
+        }
+        
+        # Real quote status breakdown
+        quote_status = {
+            'pending': Quote.query.filter_by(status='pending').count(),
+            'approved': Quote.query.filter_by(status='approved').count(),
+            'declined': Quote.query.filter_by(status='declined').count(),
+            'converted': Quote.query.filter_by(status='converted').count()
+        }
+        
+        # Monthly trends (last 6 months)
+        months = []
+        quote_counts = []
+        revenues = []
+        
+        for i in range(6):
+            month_date = today.replace(day=1) - timedelta(days=32*i)
+            month_start = month_date.replace(day=1)
+            next_month = (month_start + timedelta(days=32)).replace(day=1)
+            
+            month_quotes = Quote.query.filter(
+                Quote.created_at >= month_start,
+                Quote.created_at < next_month
+            ).count()
+            
+            month_revenue = sum((q.final_price or q.calculated_price or 0) 
+                              for q in Quote.query.filter(
+                                  Quote.created_at >= month_start,
+                                  Quote.created_at < next_month,
+                                  Quote.status == 'approved'
+                              ).all())
+            
+            months.insert(0, month_start.strftime('%Y-%m'))
+            quote_counts.insert(0, month_quotes)
+            revenues.insert(0, round(month_revenue, 2))
+        
+        trends = {
+            'months': months,
+            'quote_counts': quote_counts,
+            'revenues': revenues
+        }
+        
+        return render_template('admin_analytics.html',
+                             stats=stats,
+                             daily_stats=daily_stats,
+                             category_breakdown=category_breakdown,
+                             customer_insights=customer_insights,
+                             quote_status=quote_status,
+                             trends=trends)
+        
+    except Exception as e:
+        # Fallback to zeros if there's any error
+        stats = {
+            'total_quotes': 0,
+            'total_orders': 0,
+            'total_customers': 0,
+            'this_month_quotes': 0,
+            'this_month_orders': 0,
+            'total_revenue': 0.0,
+            'this_month_revenue': 0.0,
+            'conversion_rate': 0.0,
+            'avg_order_value': 0.0
+        }
+        
+        daily_stats = {
+            'quotes': [(today.strftime('%Y-%m-%d'), 0) for i in range(7)],
+            'orders': [(today.strftime('%Y-%m-%d'), 0) for i in range(7)],
+            'revenue': [(today.strftime('%Y-%m-%d'), 0.0) for i in range(7)]
+        }
+        
+        category_breakdown = {
+            'categories': ['Banner', 'Apparel', 'Decals', 'Yard Signs'],
+            'counts': [0, 0, 0, 0],
+            'values': [0.0, 0.0, 0.0, 0.0]
+        }
+        
+        customer_insights = {
+            'top_customers': [],
+            'customer_types': {'retail': 0}
+        }
+        
+        quote_status = {
+            'pending': 0,
+            'approved': 0,
+            'declined': 0,
+            'converted': 0
+        }
+        
+        trends = {
+            'months': [],
+            'quote_counts': [],
+            'revenues': []
+        }
+        
+        return render_template('admin_analytics.html',
+                             stats=stats,
+                             daily_stats=daily_stats,
+                             category_breakdown=category_breakdown,
+                             customer_insights=customer_insights,
+                             quote_status=quote_status,
+                             trends=trends)
+
+@app.route('/api/analytics/daily')
+def api_daily_analytics():
+    """API endpoint for real-time daily analytics"""
+    try:
+        days = request.args.get('days', 30, type=int)
+        data = analytics_service.get_daily_stats(days)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ========================
+# PDF GENERATION ROUTES
+# ========================
+
+@app.route('/admin/quote/<quote_number>/pdf')
+def generate_quote_pdf(quote_number):
+    """Generate and download PDF for a quote"""
+    try:
+        quote = Quote.query.filter_by(quote_number=quote_number).first()
+        if not quote:
+            flash('Quote not found', 'error')
+            return redirect(url_for('admin_quotes'))
+        
+        customer = Customer.query.get(quote.customer_id)
+        
+        # Create PDF filename
+        pdf_filename = f"quote_{quote_number}.pdf"
+        pdf_path = os.path.join('static', 'temp', pdf_filename)
+        
+        # Ensure temp directory exists
+        os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
+        
+        # Generate PDF
+        success, message = pdf_generator.generate_quote_pdf(quote, customer, pdf_path)
+        
+        if success:
+            # Update quote record
+            quote.pdf_generated = True
+            db.session.commit()
+            
+            # Send file
+            return send_file(pdf_path, as_attachment=True, download_name=pdf_filename)
+        else:
+            flash(f'Error generating PDF: {message}', 'error')
+            return redirect(url_for('admin_quote_detail', quote_number=quote_number))
+            
+    except Exception as e:
+        flash(f'Error generating PDF: {str(e)}', 'error')
+        return redirect(url_for('admin_quote_detail', quote_number=quote_number))
+
+@app.route('/admin/quote/<quote_number>/email-pdf', methods=['POST'])
+def email_quote_pdf(quote_number):
+    """Generate PDF and email it to customer"""
+    try:
+        quote = Quote.query.filter_by(quote_number=quote_number).first()
+        if not quote:
+            flash('Quote not found', 'error')
+            return redirect(url_for('admin_quotes'))
+        
+        customer = Customer.query.get(quote.customer_id)
+        
+        # Create PDF filename
+        pdf_filename = f"quote_{quote_number}.pdf"
+        pdf_path = os.path.join('static', 'temp', pdf_filename)
+        
+        # Ensure temp directory exists
+        os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
+        
+        # Generate PDF
+        success, message = pdf_generator.generate_quote_pdf(quote, customer, pdf_path)
+        
+        if success:
+            # Update quote record
+            quote.pdf_generated = True
+            quote.email_sent = True
+            db.session.commit()
+            
+            # TODO: Add email sending functionality here
+            # For now, just mark as sent and provide download
+            flash('PDF generated! Email functionality coming soon - download ready.', 'success')
+        else:
+            flash(f'Error generating PDF: {message}', 'error')
+            
+        return redirect(url_for('admin_quote_detail', quote_number=quote_number))
+        
+    except Exception as e:
+        flash(f'Error processing email: {str(e)}', 'error')
+        return redirect(url_for('admin_quote_detail', quote_number=quote_number))
+
+# ========================
+# FILE UPLOAD ROUTES
+# ========================
+
+@app.route('/admin/quote/<quote_number>/upload', methods=['POST'])
+def upload_quote_file(quote_number):
+    """Upload a file to a quote"""
+    try:
+        quote = Quote.query.filter_by(quote_number=quote_number).first()
+        if not quote:
+            flash('Quote not found', 'error')
+            return redirect(url_for('admin_quotes'))
+        
+        if 'file' not in request.files:
+            flash('No file selected', 'error')
+            return redirect(url_for('admin_quote_detail', quote_number=quote_number))
+        
+        file = request.files['file']
+        description = request.form.get('description', '')
+        
+        # Upload file
+        quote_file, message = file_handler.save_quote_file(file, quote.id, description)
+        
+        if quote_file:
+            flash('File uploaded successfully!', 'success')
+        else:
+            flash(f'Upload failed: {message}', 'error')
+            
+        return redirect(url_for('admin_quote_detail', quote_number=quote_number))
+        
+    except Exception as e:
+        flash(f'Error uploading file: {str(e)}', 'error')
+        return redirect(url_for('admin_quote_detail', quote_number=quote_number))
+
+@app.route('/admin/file/<int:file_id>/delete', methods=['POST'])
+def delete_quote_file(file_id):
+    """Delete a quote file"""
+    try:
+        quote_file = QuoteFile.query.get(file_id)
+        if not quote_file:
+            flash('File not found', 'error')
+            return redirect(url_for('admin_quotes'))
+        
+        quote_number = quote_file.quote.quote_number
+        
+        # Delete file
+        success, message = file_handler.delete_file(quote_file)
+        
+        if success:
+            flash('File deleted successfully!', 'success')
+        else:
+            flash(f'Delete failed: {message}', 'error')
+            
+        return redirect(url_for('admin_quote_detail', quote_number=quote_number))
+        
+    except Exception as e:
+        flash(f'Error deleting file: {str(e)}', 'error')
+        return redirect(url_for('admin_quotes'))
+
+# ========================
+# SMART PRICING ROUTES
+# ========================
+
+@app.route('/admin/pricing/smart-update', methods=['POST'])
+def smart_pricing_update():
+    """Update pricing with smart algorithms"""
+    try:
+        # Get volume discounts and rush pricing settings
+        volume_discount = float(request.form.get('volume_discount', 0))
+        rush_multiplier = float(request.form.get('rush_multiplier', 1.5))
+        
+        # Apply smart pricing logic
+        # This would implement volume-based and rush pricing
+        
+        flash('Smart pricing updated successfully!', 'success')
+        return redirect(url_for('admin_settings'))
+        
+    except Exception as e:
+        flash(f'Error updating pricing: {str(e)}', 'error')
+        return redirect(url_for('admin_settings'))
+
+# ========================
+# REAL-TIME NOTIFICATIONS
+# ========================
+
+@app.route('/api/notifications/live')
+def live_notifications():
+    """Get live notifications for dashboard"""
+    try:
+        # Get recent quotes, orders, and alerts
+        recent_quotes = Quote.query.filter(
+            Quote.created_at >= datetime.now() - timedelta(hours=24)
+        ).count()
+        
+        pending_orders = Order.query.filter_by(status='confirmed').count()
+        overdue_orders = Order.query.filter(
+            Order.due_date < datetime.now(),
+            Order.status.in_(['confirmed', 'in_production'])
+        ).count()
+        
+        notifications = {
+            'new_quotes_24h': recent_quotes,
+            'pending_orders': pending_orders,
+            'overdue_orders': overdue_orders,
+            'alerts': []
+        }
+        
+        # Add alert messages
+        if overdue_orders > 0:
+            notifications['alerts'].append({
+                'type': 'warning',
+                'message': f'{overdue_orders} orders are overdue!',
+                'action': url_for('admin_orders')
+            })
+        
+        if recent_quotes > 5:
+            notifications['alerts'].append({
+                'type': 'success',
+                'message': f'{recent_quotes} new quotes in last 24 hours!',
+                'action': url_for('admin_quotes')
+            })
+        
+        return jsonify(notifications)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ========================
+# ENHANCED ADMIN DASHBOARD
+# ========================
+
+@app.route('/admin/dashboard-enhanced')
+def admin_dashboard_enhanced():
+    """Enhanced admin dashboard with real-time features"""
+    try:
+        # Get quick stats
+        stats = analytics_service.get_dashboard_stats()
+        
+        # Get recent activity
+        recent_quotes = Quote.query.order_by(Quote.created_at.desc()).limit(5).all()
+        recent_orders = Order.query.order_by(Order.created_at.desc()).limit(5).all()
+        
+        return render_template('admin_dashboard_enhanced.html',
+                             stats=stats,
+                             recent_quotes=recent_quotes,
+                             recent_orders=recent_orders)
+        
+    except Exception as e:
+        flash(f'Error loading dashboard: {str(e)}', 'error')
+        return redirect(url_for('admin_home'))
+
+# ========================
+# CHATBOT ROUTES
+# ========================
+
+@app.route('/api/chat', methods=['POST'])
+def chat_with_ai():
+    """Handle chatbot conversations"""
+    try:
+        data = request.get_json()
+        user_message = data.get('message', '').strip()
+        
+        if not user_message:
+            return jsonify({'error': 'Message is required'}), 400
+        
+        # System prompt to make the AI a helpful print shop assistant
+        system_prompt = """You are an AI assistant for DTF Designs, a professional print shop specializing in DTF (Direct-to-Film) printing, banners, decals, yard signs, and apparel printing.
+
+Your role is to help customers with:
+- Product information and material choices
+- Pricing guidance and quantity discounts  
+- Turnaround times and rush orders
+- Design file requirements and artwork specs
+- Finishing options (hemming, grommets, lamination)
+- General printing questions
+
+Key business info:
+- Standard turnaround: 3-5 business days
+- Rush service available (1-2 days)
+- We print on various materials: vinyl banners, decals, yard signs, apparel
+- Material costs vary by type and quality
+- Quantity discounts available
+- Professional finishing options available
+
+Be helpful, friendly, and knowledgeable. Keep responses concise but informative. If asked about specific pricing, suggest they use the quote calculator for accurate estimates."""
+
+        # the newest OpenAI model is "gpt-5" which was released August 7, 2025.
+        # do not change this unless explicitly requested by the user
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            max_tokens=300,
+            temperature=0.7
+        )
+        
+        ai_response = response.choices[0].message.content
+        
+        return jsonify({
+            'success': True,
+            'response': ai_response
+        })
+        
+    except Exception as e:
+        logging.error(f"Chatbot error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Sorry, I\'m having trouble right now. Please try again later.'
+        }), 500
+
+# ========================
+# EMPLOYEE ROUTES
+# ========================
+
+@app.route('/employee-login', methods=['GET', 'POST'])
+def employee_login():
+    """Employee login with password"""
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        if password == '941063':
+            session['employee_authenticated'] = True
+            flash('Welcome, employee!', 'success')
+            return redirect(url_for('employee_calculator'))
+        else:
+            flash('Invalid password', 'error')
+    
+    return render_template('employee_login.html')
+
+@app.route('/employee-logout')
+def employee_logout():
+    """Employee logout"""
+    session.pop('employee_authenticated', None)
+    flash('You have been logged out', 'info')
+    return redirect(url_for('employee_login'))
+
+def employee_required(f):
+    """Decorator to require employee authentication"""
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('employee_authenticated'):
+            flash('Please log in to access employee tools', 'error')
+            return redirect(url_for('employee_login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/employee-calculator', methods=['GET', 'POST'])
+@employee_required
+def employee_calculator():
+    """Employee calculator with cost breakdown and profit analysis"""
+    try:
+        categories = ['Banner', 'Decals', 'Poster', 'Yard Signs', 'Apparel']
+        selected_category = request.form.get('category') or request.args.get('category', 'Banner')
+        
+        # Get materials based on category
+        if selected_category == 'Banner':
+            materials = Material.query.filter_by(material_type='banner', active=True).all()
+        elif selected_category == 'Decals':
+            materials = Material.query.filter(
+                Material.material_type.in_(['cast_vinyl', 'vinyl', 'decal']),
+                Material.active == True
+            ).all()
+        elif selected_category == 'Poster':
+            materials = Material.query.filter_by(material_type='poster', active=True).all()
+        else:
+            materials = Material.query.filter_by(material_type='banner', active=True).all()
+        
+        media_names = [m.name for m in materials]
+        
+        result = None
+        error = None
+        
+        if request.method == 'POST':
+            try:
+                form_data = request.form.to_dict()
+                form_data['category'] = selected_category
+                form_data['customer_type'] = 'employee'  # Force employee pricing
+                
+                # Calculate based on category using centralized pricing
+                if selected_category == 'Banner':
+                    # Use centralized banner employee cost function
+                    width_ft = float(form_data.get('width_in', 48)) / 12.0
+                    height_ft = float(form_data.get('height_in', 24)) / 12.0
+                    qty = int(form_data.get('qty', 1))
+                    material = 'alpha'  # Default material
+                    hemming = form_data.get('hem_opt', 'None') != 'None'
+                    grommets = int(form_data.get('grommets', 0))
+                    
+                    employee_cost_result = banner_employee_cost(
+                        width_ft=width_ft,
+                        height_ft=height_ft,
+                        qty=qty,
+                        material=material,
+                        reinforced_corners=hemming,  # Map hemming to reinforced corners
+                        wind_slits=False,
+                        pole_pockets_pairs=grommets // 2,
+                        double_sided=False
+                    )
+                    
+                    # Format result to match expected structure
+                    billable_sqft = width_ft * height_ft * qty
+                    result = {
+                        'totals': {
+                            'quoted_price': employee_cost_result['total_cost_usd'],
+                            'unit_price': employee_cost_result['unit_cost_usd'], 
+                            'total_sqft': billable_sqft
+                        },
+                        'breakdown': {
+                            'True Cost': f"${employee_cost_result['total_cost_usd']:.2f}",
+                            'Unit Cost': f"${employee_cost_result['unit_cost_usd']:.2f}",
+                            'Floor Sell Price': f"${employee_cost_result['floor_sell_total_usd']:.2f}"
+                        },
+                        'derived': {
+                            'billable_sqft': round(billable_sqft, 2)
+                        }
+                    }
+                elif selected_category in ['Decals', 'Poster']:
+                    result = calculate_area_pricing(form_data)
+                elif selected_category == 'Yard Signs':
+                    result = calculate_yard_signs(form_data)
+                elif selected_category == 'Apparel':
+                    result = calculate_apparel(form_data)
+                
+                # Add employee-specific analysis using new centralized pricing
+                if result and 'totals' in result:
+                    try:
+                        category = form_data.get('category', 'Banner')
+                        
+                        if category == 'Banner':
+                            # For banners, use the already calculated correct values - DON'T OVERRIDE THEM
+                            true_cost = result['totals']['quoted_price']  # This is already correct $11.00
+                            
+                            # Calculate retail price using centralized function
+                            width_in = float(form_data.get('width_in', 4))
+                            height_in = float(form_data.get('height_in', 4))  
+                            qty = int(form_data.get('qty', 1))
+                            width_ft = width_in / 12.0
+                            height_ft = height_in / 12.0
+                            material = 'alpha'  # Default material
+                            hemming = form_data.get('hem_opt', 'None') != 'None'
+                            grommets = int(form_data.get('grommets', 0))
+                            
+                            retail_result = banner_quote_with_guard(
+                                width_ft=width_ft,
+                                height_ft=height_ft,
+                                qty=qty,
+                                material=material,
+                                include_waste=True,
+                                reinforced_corners=hemming,
+                                wind_slits=False,
+                                pole_pockets_pairs=grommets // 2,
+                                double_sided=False,
+                                rush=False
+                            )
+                            retail_price = retail_result['total_usd'] if 'total_usd' in retail_result else true_cost * 2.5
+                            
+                        elif category == 'Decals':
+                            from scripts.pricers import decal_cost_true, decal_price_retail
+                            width_in = float(form_data.get('width_in', 4))
+                            height_in = float(form_data.get('height_in', 4))  
+                            qty = int(form_data.get('qty', 1))
+                            cut_type = 'die' if 'die' in form_data.get('media_name', '').lower() else 'kiss'
+                            laminated = 'lam' in form_data.get('laminate_name', '').lower() or 'laminate' in form_data.get('laminate_name', '').lower()
+                            material = 'eco_gloss'  # Default material for cost calculation
+                            
+                            _, true_cost = decal_cost_true(width_in, height_in, qty, material, cut_type, laminated, False)
+                            _, retail_price = decal_price_retail(width_in, height_in, qty, cut_type, laminated, False)
+                            
+                        elif category == 'Poster':
+                            from scripts.pricers import poster_cost_true, poster_price_retail
+                            width_in = float(form_data.get('width_in', 4))
+                            height_in = float(form_data.get('height_in', 4))  
+                            qty = int(form_data.get('qty', 1))
+                            material = 'matte'  # Default material
+                            laminated = 'lam' in form_data.get('laminate_name', '').lower()
+                            
+                            _, true_cost = poster_cost_true(width_in, height_in, qty, material, laminated, None, False)
+                            _, retail_price = poster_price_retail(width_in, height_in, qty, material, laminated, None, False, False)
+                        else:
+                            # Fallback for other categories
+                            true_cost = result['totals']['quoted_price']
+                            retail_price = true_cost * 2.5
+                        
+                        # Calculate profit margins  
+                        customer_profit = retail_price - true_cost
+                        customer_profit_margin = (customer_profit / retail_price * 100) if retail_price > 0 else 0
+                        
+                        # Industry standard pricing
+                        if category == 'Banner':
+                            industry_low = true_cost * 2.2
+                            industry_high = true_cost * 3.0
+                        elif category in ['Decals', 'Poster']:
+                            industry_low = true_cost * 2.8
+                            industry_high = true_cost * 3.8
+                        else:
+                            industry_low = true_cost * 2.5
+                            industry_high = true_cost * 3.2
+                        
+                        # Partner pricing - 30% discount from retail or minimum margin, whichever is higher
+                        discount_partner_price = retail_price * 0.7
+                        min_margin_partner_price = true_cost / 0.70
+                        partner_price = max(discount_partner_price, min_margin_partner_price)
+                        partner_profit = partner_price - true_cost
+                        partner_profit_margin = (partner_profit / partner_price * 100) if partner_price > 0 else 0
+                        
+                        # Update result with corrected analysis
+                        result['employee_analysis'] = {
+                            'true_cost': round(true_cost, 2),
+                            'customer_price': round(retail_price, 2),
+                            'partner_price': round(partner_price, 2),
+                            'profit_amount': round(customer_profit, 2),
+                            'profit_margin_percent': round(customer_profit_margin, 1),
+                            'partner_profit': round(partner_profit, 2),
+                            'partner_profit_margin': round(partner_profit_margin, 1),
+                            'industry_standard_low': round(industry_low, 2),
+                            'industry_standard_high': round(industry_high, 2),
+                            'vs_industry_low': round(retail_price - industry_low, 2),
+                            'vs_industry_high': round(retail_price - industry_high, 2)
+                        }
+                        
+                        # CRITICAL: For banners, do NOT override the already correct totals
+                        if category != 'Banner':
+                            result['totals']['quoted_price'] = round(true_cost, 2)
+                            result['totals']['unit_price'] = round(true_cost / qty, 2) if qty > 0 else 0
+                        
+                    except Exception as e:
+                        logging.error(f"Error in employee analysis calculation: {str(e)}")
+                        # Fallback to basic calculation - but don't override banner totals
+                        if form_data.get('category', 'Banner') != 'Banner':
+                            result['employee_analysis'] = {
+                                'true_cost': round(result['totals']['quoted_price'], 2),
+                                'customer_price': round(result['totals']['quoted_price'] * 2.5, 2),
+                                'partner_price': round(result['totals']['quoted_price'] * 1.75, 2),
+                                'profit_amount': round(result['totals']['quoted_price'] * 1.5, 2),
+                                'profit_margin_percent': 60.0,
+                                'partner_profit': round(result['totals']['quoted_price'] * 0.75, 2),
+                                'partner_profit_margin': 42.9,
+                                'industry_standard_low': round(result['totals']['quoted_price'] * 2.5, 2),
+                                'industry_standard_high': round(result['totals']['quoted_price'] * 3.2, 2),
+                                'vs_industry_low': 0.0,
+                                'vs_industry_high': round(-result['totals']['quoted_price'] * 0.7, 2)
+                            }
+                        else:
+                            # For banners, create basic employee analysis using the correct values
+                            true_cost = result['totals']['quoted_price']
+                            result['employee_analysis'] = {
+                                'true_cost': round(true_cost, 2),
+                                'customer_price': round(true_cost * 4.7, 2),  # Approximate retail price
+                                'partner_price': round(true_cost * 1.43, 2),  # 30% off retail
+                                'profit_amount': round(true_cost * 3.7, 2),
+                                'profit_margin_percent': 78.7,
+                                'partner_profit': round(true_cost * 0.43, 2),
+                                'partner_profit_margin': 30.0,
+                                'industry_standard_low': round(true_cost * 2.2, 2),
+                                'industry_standard_high': round(true_cost * 3.0, 2),
+                                'vs_industry_low': round(true_cost * 2.5, 2),
+                                'vs_industry_high': round(true_cost * 1.7, 2)
+                            }
+                
+            except Exception as e:
+                logging.error(f"Error in employee calculator: {str(e)}")
+                error = f"Error calculating quote: {str(e)}"
+        
+        # Get additional data for templates
+        apparel_garments = [item['garment'] for item in CONFIG['catalog'][2]['items']]
+        size_options = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL']
+        
+        response = make_response(render_template('employee_calculator.html',
+                                               categories=categories,
+                                               selected_category=selected_category,
+                                               media_names=media_names,
+                                               result=result,
+                                               error=error,
+                                               apparel_garments=apparel_garments,
+                                               size_options=size_options))
+        
+        # Force browser to refresh - prevent caching
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
+                             
+    except Exception as e:
+        logging.error(f"Employee calculator error: {str(e)}")
+        # Don't kick user out on errors - keep them logged in
+        flash(f'Error loading calculator: {str(e)}', 'error')
+        return render_template('employee_calculator.html',
+                             categories=['Banner', 'Decals', 'Poster', 'Yard Signs', 'Apparel'],
+                             selected_category='Banner',
+                             media_names=[],
+                             result=None,
+                             error=str(e),
+                             apparel_garments=[],
+                             size_options=['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'],
+                             form_data={})
+
+@app.route("/employee/cost/decal", methods=['POST'])
+def employee_cost_decal():
+    # Admin token protection
+    ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "dtf_admin_2025")
+    token = request.headers.get("X-ADMIN-TOKEN", "")
+    if not ADMIN_TOKEN or token != ADMIN_TOKEN:
+        return jsonify({"error": "Admin token required"}), 401
+        
+    from scripts.pricers import decal_employee_cost
+    
+    d = request.get_json(force=True)
+    result = decal_employee_cost(
+        width_in=float(d["width_in"]),
+        height_in=float(d["height_in"]),
+        qty=int(d["qty"]),
+        material=d.get("material", "eco_gloss"),
+        cut_type=d.get("cut_type", "kiss"),
+        laminated=d.get("laminated", False),
+        intricate=d.get("intricate", False)
+    )
+    return jsonify(result)
+
+# ========== API HELPER FUNCTIONS ==========
+
+def _parse_request_data():
+    """Parse JSON request data"""
+    return request.get_json(force=True)
+
+def _require_admin():
+    """Require admin token for protected endpoints"""
+    ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "dtf_admin_2025")
+    token = request.headers.get("X-ADMIN-TOKEN", "")
+    if not ADMIN_TOKEN or token != ADMIN_TOKEN:
+        from flask import abort
+        abort(401, description="Admin token required")
+
+# ========== RETAIL QUOTE API ENDPOINTS ==========
+
+@app.route("/quote/banner", methods=['POST'])
+def quote_banner():
+    """
+    Retail banner quote with margin guard
+    """
+    d = _parse_request_data()
+    
+    # Normalize addons - support both flat flags and addons dict
+    addons_data = d.get("addons") or {
+        "reinforced_corners": d.get("reinforced_corners", False),
+        "wind_slits": d.get("wind_slits", False),
+        "pole_pockets_pairs": d.get("pole_pockets_pairs", 0),
+        "double_sided": d.get("double_sided", False),
+        "rush": d.get("rush", False)
+    }
+    
+    try:
+        result = banner_quote_with_guard(
+            width_ft=float(d["width_ft"]),
+            height_ft=float(d["height_ft"]),
+            qty=int(d["qty"]),
+            material=d.get("material", "alpha"),
+            include_waste=d.get("include_waste", True),
+            reinforced_corners=addons_data["reinforced_corners"],
+            wind_slits=addons_data["wind_slits"],
+            pole_pockets_pairs=int(addons_data["pole_pockets_pairs"]),
+            double_sided=addons_data["double_sided"],
+            rush=addons_data["rush"]
+        )
+        
+        if "error" in result:
+            return jsonify(result), 409
+            
+        return jsonify(result)
+    
+    except Exception as e:
+        from flask import abort
+        abort(400, description=f"Calculation error: {str(e)}")
+
+# ========== EMPLOYEE COST API ENDPOINTS (ADMIN ONLY) ==========
+
+@app.route("/employee/cost/banner", methods=['POST'])
+def employee_cost_banner():
+    """
+    Employee cost calculation for banners (admin only)
+    """
+    _require_admin()
+    d = _parse_request_data()
+    
+    try:
+        result = banner_employee_cost(
+            width_ft=float(d["width_ft"]),
+            height_ft=float(d["height_ft"]),
+            qty=int(d["qty"]),
+            material=d.get("material", "alpha"),
+            reinforced_corners=d.get("reinforced_corners", False),
+            wind_slits=d.get("wind_slits", False),
+            pole_pockets_pairs=int(d.get("pole_pockets_pairs", 0)),
+            double_sided=d.get("double_sided", False)
+        )
+        
+        return jsonify(result)
+    
+    except Exception as e:
+        from flask import abort
+        abort(400, description=f"Calculation error: {str(e)}")
+
+@app.route("/employee/floor/decal", methods=['POST'])
+def employee_floor_decal():
+    # Legacy endpoint - redirect to new employee cost endpoint
+    return employee_cost_decal()
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)

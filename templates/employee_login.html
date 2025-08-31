@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>🔒 DTF Designs Employee Login</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in { animation: fadeInUp 0.8s ease-out; }
+        .login-hero { background: linear-gradient(135deg, #000000 0%, #333333 100%); padding: 4rem 0; min-height: 100vh; display: flex; align-items: center; }
+        .login-card { background: linear-gradient(45deg, #333333, #000000); border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.3); }
+        .btn-employee { background: linear-gradient(45deg, #666666, #333333); border: none; }
+        .btn-employee:hover { background: linear-gradient(45deg, #333333, #666666); transform: translateY(-2px); }
+    </style>
+</head>
+<body>
+    <div class="login-hero">
+        <div class="container">
+            <div class="row justify-content-center">
+                <div class="col-md-6 col-lg-4">
+                    <div class="login-card p-5 fade-in">
+                        <div class="text-center mb-4">
+                            <img src="{{ url_for('static', filename='images/dtf-logo.png') }}" alt="DTF Designs Logo" class="img-fluid mb-3" style="max-width: 200px;">
+                            <h2 class="text-white"><i class="fas fa-user-tie me-2"></i>Employee Access</h2>
+                            <p class="text-muted">Internal pricing and analysis tools</p>
+                        </div>
+
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                            {% if messages %}
+                                {% for category, message in messages %}
+                                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                                        {{ message }}
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
+
+                        <form method="POST">
+                            <div class="mb-4">
+                                <label for="password" class="form-label text-white">
+                                    <i class="fas fa-lock me-2"></i>Employee Password
+                                </label>
+                                <input type="password" class="form-control form-control-lg" id="password" name="password" required autofocus>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-employee btn-lg w-100 mb-3">
+                                <i class="fas fa-sign-in-alt me-2"></i>Access Employee Tools
+                            </button>
+                        </form>
+                        
+                        <div class="text-center">
+                            <a href="/" class="text-muted">
+                                <i class="fas fa-arrow-left me-2"></i>Back to Customer Calculator
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Auto-focus password field
+        document.getElementById('password').focus();
+        
+        // Enter key submission
+        document.getElementById('password').addEventListener('keypress', function(event) {
+            if (event.key === 'Enter') {
+                event.target.closest('form').submit();
+            }
+        });
+    </script>
+</body>
+</html>

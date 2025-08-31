@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DTF Designs - Manage Yard Signs</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container py-5">
+        <h1 class="mb-4">Manage Yard Signs</h1>
+        
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <a href="{{ url_for('admin_home') }}" class="btn btn-secondary">← Back to Admin</a>
+            <a href="{{ url_for('admin_add_yard_sign') }}" class="btn btn-success">Add New Yard Sign</a>
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>SKU</th>
+                        <th>Blank Cost</th>
+                        <th>Print Cost</th>
+                        <th>Stake Cost</th>
+                        <th>Retail Price</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for yard_sign in yard_signs %}
+                    <tr>
+                        <td>{{ yard_sign.name }}</td>
+                        <td><code>{{ yard_sign.sku }}</code></td>
+                        <td>${{ "%.2f"|format(yard_sign.blank_cost) }}</td>
+                        <td>${{ "%.2f"|format(yard_sign.print_cost) }}</td>
+                        <td>${{ "%.2f"|format(yard_sign.stake_cost) }}</td>
+                        <td>${{ "%.2f"|format(yard_sign.retail_price) }}</td>
+                        <td>
+                            <a href="#" class="btn btn-sm btn-primary">Edit</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

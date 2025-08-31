@@ -1,0 +1,878 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>✨ DTF Designs Customer Calculator ✨</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-10px); }
+            60% { transform: translateY(-5px); }
+        }
+        .fade-in { animation: fadeInUp 0.8s ease-out; }
+        .card { transition: all 0.3s ease; border: none; box-shadow: 0 8px 25px rgba(0,0,0,0.15); }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 15px 35px rgba(0,0,0,0.2); }
+        .btn { transition: all 0.3s ease; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .quote-btn:hover { transform: scale(1.05) translateY(-3px); box-shadow: 0 10px 25px rgba(102,102,102,0.4); }
+        .form-control { transition: all 0.3s ease; }
+        .form-select { transition: all 0.3s ease; }
+        .auto-calc { background: linear-gradient(45deg, #333333, #555555); color: white; border: 1px solid #666666; }
+        .price-preview { background: #333; border: 1px solid #666; padding: 15px; border-radius: 10px; margin: 10px 0; }
+        .interactive-hint { font-size: 0.9rem; color: #aaa; margin-top: 5px; }
+        
+        /* Chatbot Styles */
+        .chat-widget { position: fixed; bottom: 20px; right: 20px; z-index: 1000; }
+        .chat-toggle { background: linear-gradient(45deg, #333333, #666666); width: 60px; height: 60px; border-radius: 50%; border: none; color: white; font-size: 24px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: all 0.3s ease; }
+        .chat-toggle:hover { transform: scale(1.1); box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
+        .chat-window { display: none; position: fixed; bottom: 90px; right: 20px; width: 350px; height: 500px; background: #333; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 1001; }
+        .chat-header { background: linear-gradient(45deg, #333333, #666666); color: white; padding: 15px; border-radius: 15px 15px 0 0; display: flex; justify-content: between; align-items: center; }
+        .chat-messages { height: 350px; overflow-y: auto; padding: 15px; background: #222; }
+        .chat-input-area { padding: 15px; background: #333; border-radius: 0 0 15px 15px; }
+        .message { margin-bottom: 15px; }
+        .message.user { text-align: right; }
+        .message.ai { text-align: left; }
+        .message .content { display: inline-block; padding: 10px 15px; border-radius: 18px; max-width: 80%; }
+        .message.user .content { background: #666; color: white; }
+        .message.ai .content { background: #555; color: white; }
+        .chat-input { width: 100%; padding: 10px; border: 1px solid #666; border-radius: 20px; background: #444; color: white; }
+        .chat-send { background: #666; border: none; color: white; padding: 8px 15px; border-radius: 20px; margin-left: 10px; }
+        .form-control:focus { transform: scale(1.02); box-shadow: 0 0 20px rgba(102, 102, 102, 0.3); }
+        .hero-section { background: linear-gradient(135deg, #000000 0%, #333333 100%); padding: 3rem 0; margin: -2rem -15px 2rem -15px; border-bottom: 3px solid #666666; }
+        .price-highlight { animation: pulse 2s infinite; }
+        .feature-icon { font-size: 3rem; color: #666666; animation: bounce 2s infinite; }
+        .quote-section { background: linear-gradient(135deg, #555555 0%, #333333 100%); border-radius: 20px; }
+        .glow { box-shadow: 0 0 30px rgba(102, 102, 102, 0.5); }
+        .category-card { background: linear-gradient(45deg, #666666, #000000); transition: all 0.3s ease; }
+        .category-card:hover { background: linear-gradient(45deg, #000000, #666666); }
+        .banner-section { background: #333; padding: 25px; border-radius: 10px; margin-bottom: 20px; }
+        .delivery-info { border: 1px solid #555; }
+    </style>
+</head>
+<body>
+    <div class="hero-section text-center text-white">
+        <div class="container">
+            <div class="fade-in">
+                <img src="{{ url_for('static', filename='images/dtf-logo.png') }}" alt="DTF Designs Logo" class="img-fluid mb-3" style="max-width: 400px; height: auto; filter: drop-shadow(0 5px 15px rgba(0,0,0,0.3));">
+                <h1 class="display-4 fw-bold mb-3">Customer Calculator</h1>
+                <p class="lead mb-4">Get instant quotes for professional printing services!</p>
+                <div class="d-flex justify-content-center gap-3">
+                    <a href="{{ url_for('admin_login') }}" class="btn btn-outline-light"><i class="fas fa-user-shield"></i> Admin Portal</a>
+                    <a href="{{ url_for('partner_login') }}" class="btn btn-warning"><i class="fas fa-handshake"></i> Partner Access</a>
+                    <a href="{{ url_for('employee_login') }}" class="btn btn-secondary"><i class="fas fa-user-tie"></i> Employee</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="container py-4">
+        
+        <div class="alert alert-info" role="alert">
+            <small>Final pricing subject to artwork review and finishing options.</small>
+        </div>
+
+        {% if error %}
+        <div class="alert alert-danger" role="alert">
+            <strong>Error:</strong> {{ error }}
+        </div>
+        {% endif %}
+
+        <div class="card quote-section glow fade-in">
+            <div class="card-body">
+                <h5 class="card-title text-white fw-bold"><i class="fas fa-calculator me-2"></i>Get Your Instant Quote</h5>
+                <form method="POST" id="quoteForm">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-12">
+                            <label for="category" class="form-label">Product Category</label>
+                            <select name="category" id="category" class="form-select" onchange="document.getElementById('quoteForm').submit()">
+                                {% for c in categories %}
+                                <option value="{{ c }}" {% if c == selected_category %}selected{% endif %}>{{ c }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    {% if selected_category == "Banner" %}
+                    <div class="banner-section">
+                        <h4 class="text-white mb-4"><i class="fas fa-flag me-2"></i>Vinyl Banners</h4>
+                        <p class="text-muted mb-3">Professional 13oz vinyl banners with hems + grommets included. Weather-resistant and built to last.</p>
+                        
+                        
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label for="media_name" class="form-label">Banner Material</label>
+                                <select name="media_name" class="form-select" required>
+                                    <option value="alpha" {% if form_data.get('media_name') == 'alpha' %}selected{% endif %}>ALPHA Premium Matte Frontlit Banner 13oz</option>
+                                    <option value="jetflex" {% if form_data.get('media_name') == 'jetflex' %}selected{% endif %}>JetFlex® FL Gloss White 13oz (+$0.25/sqft)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Banner Size <small class="text-muted">(W×H)</small></label>
+                                <select class="form-select" id="banner-size-select" onchange="updateBannerSize()">
+                                    <option value="custom">Custom Size...</option>
+                                    <option value="24x12">2' × 1' (24"W × 12"H)</option>
+                                    <option value="36x18">3' × 1.5' (36"W × 18"H)</option>
+                                    <option value="48x24" selected>4' × 2' (48"W × 24"H)</option>
+                                    <option value="72x24">6' × 2' (72"W × 24"H)</option>
+                                    <option value="48x36">4' × 3' (48"W × 36"H)</option>
+                                    <option value="72x36">6' × 3' (72"W × 36"H)</option>
+                                    <option value="96x36">8' × 3' (96"W × 36"H)</option>
+                                    <option value="72x48">6' × 4' (72"W × 48"H)</option>
+                                    <option value="96x48">8' × 4' (96"W × 48"H)</option>
+                                </select>
+                                <small class="text-muted">Width × Height orientation</small>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-3">
+                                <label for="width_in" class="form-label">Width (inches)</label>
+                                <input type="number" step="0.01" name="width_in" id="custom-width" value="{{ form_data.get('width_in', '48') }}" class="form-control" required min="12" max="144">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="height_in" class="form-label">Height (inches)</label>
+                                <input type="number" step="0.01" name="height_in" id="custom-height" value="{{ form_data.get('height_in', '24') }}" class="form-control" required min="12" max="144">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="qty" class="form-label">Quantity</label>
+                                <input type="number" step="1" min="1" name="qty" value="{{ form_data.get('qty', '1') }}" class="form-control" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="sides" class="form-label">Print Sides</label>
+                                <select name="sides" class="form-select">
+                                    <option value="1" {% if form_data.get('sides') == '1' or not form_data.get('sides') %}selected{% endif %}>Single-sided</option>
+                                    <option value="2" {% if form_data.get('sides') == '2' %}selected{% endif %}>Double-sided</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <label for="coverage" class="form-label">Ink Coverage</label>
+                                <select name="coverage" class="form-select">
+                                    <option value="Light" {% if form_data.get('coverage') == 'Light' %}selected{% endif %}>Light</option>
+                                    <option value="Medium" {% if form_data.get('coverage') == 'Medium' or not form_data.get('coverage') %}selected{% endif %}>Medium</option>
+                                    <option value="Heavy" {% if form_data.get('coverage') == 'Heavy' %}selected{% endif %}>Heavy</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="hem_opt" class="form-label">Reinforced Edges</label>
+                                <select name="hem_opt" class="form-select">
+                                    <option value="None" {% if form_data.get('hem_opt') == 'None' %}selected{% endif %}>No Reinforcement</option>
+                                    <option value="All" {% if form_data.get('hem_opt') == 'All' or not form_data.get('hem_opt') %}selected{% endif %}>All Sides (Recommended)</option>
+                                    <option value="Top&Bottom" {% if form_data.get('hem_opt') == 'Top&Bottom' %}selected{% endif %}>Top & Bottom Only</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="grommets" class="form-label">Grommets</label>
+                                <input name="grommets" type="number" min="0" max="50" value="{{ form_data.get('grommets', '8') }}" class="form-control" placeholder="Number of grommets">
+                                <small class="text-muted">Recommended for hanging</small>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label for="rush" class="form-label">Production Time</label>
+                                <select name="rush" class="form-select">
+                                    <option value="Standard" {% if form_data.get('rush') == 'Standard' or not form_data.get('rush') %}selected{% endif %}>Standard (3-5 days)</option>
+                                    <option value="Rush" {% if form_data.get('rush') == 'Rush' %}selected{% endif %}>Rush (1-2 days) +25%</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="delivery-info p-3" style="background: #444; border-radius: 8px; margin-top: 32px;">
+                                    <small class="text-success"><i class="fas fa-truck me-1"></i> Express: $12.99 | Standard: $7.99 | Economy: $4.99</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if selected_category == "Decals" %}
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="media_name" class="form-label">Vinyl Material</label>
+                            <select name="media_name" class="form-select" required>
+                                <option value="gloss_vinyl" {% if form_data.get('media_name') == 'gloss_vinyl' or not form_data.get('media_name') %}selected{% endif %}>Gloss Vinyl</option>
+                                <option value="matte_vinyl" {% if form_data.get('media_name') == 'matte_vinyl' %}selected{% endif %}>Matte Vinyl</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="width_in" class="form-label">Width (inches)</label>
+                            <input type="number" step="0.01" name="width_in" value="{{ form_data.get('width_in', '4') }}" class="form-control" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="height_in" class="form-label">Height (inches)</label>
+                            <input type="number" step="0.01" name="height_in" value="{{ form_data.get('height_in', '4') }}" class="form-control" required>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <label for="qty" class="form-label">Quantity</label>
+                            <input type="number" step="1" min="1" name="qty" value="{{ form_data.get('qty', '25') }}" class="form-control" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="cut_type" class="form-label">Cut Type</label>
+                            <select name="cut_type" class="form-select" required>
+                                <option value="kiss" {% if form_data.get('cut_type') == 'kiss' or not form_data.get('cut_type') %}selected{% endif %}>Kiss-Cut (+$0.75/sq ft)</option>
+                                <option value="die" {% if form_data.get('cut_type') == 'die' %}selected{% endif %}>Die-Cut (+$1.50/sq ft)</option>
+                            </select>
+                            <small class="text-muted">Kiss-cut = peel & stick, Die-cut = individual shapes<br>
+                            <span class="text-warning">⚠️ Use 6"×6" or larger to see cut type pricing difference</span></small>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="laminate_name" class="form-label">Protective Laminate</label>
+                            <select name="laminate_name" class="form-select">
+                                <option value="" {% if not form_data.get('laminate_name') %}selected{% endif %}>None</option>
+                                <option value="gloss" {% if form_data.get('laminate_name') == 'gloss' %}selected{% endif %}>Gloss Laminate (+$2.00/sq ft)</option>
+                                <option value="matte" {% if form_data.get('laminate_name') == 'matte' %}selected{% endif %}>Matte Laminate (+$2.00/sq ft)</option>
+                            </select>
+                            <small class="text-muted">Recommended for outdoor use</small>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="rush" class="form-label">Production Time</label>
+                            <select name="rush" class="form-select">
+                                <option value="Standard" {% if form_data.get('rush') == 'Standard' or not form_data.get('rush') %}selected{% endif %}>Standard (3-5 days)</option>
+                                <option value="Rush" {% if form_data.get('rush') == 'Rush' %}selected{% endif %}>Rush (1-2 days) +25%</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info" role="alert">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="alert-heading">🎯 Popular Decal Sizes</h6>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <small><strong>Small:</strong><br>
+                                        2" × 2" stickers<br>
+                                        3" × 3" labels<br>
+                                        4" × 4" decals</small>
+                                    </div>
+                                    <div class="col-6">
+                                        <small><strong>Medium:</strong><br>
+                                        6" × 6" logos<br>
+                                        4" × 8" bumper<br>
+                                        5" × 7" window</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="alert-heading">💡 Best Value Tips</h6>
+                                <small>
+                                ✓ <strong>25+ pieces:</strong> $9.00/sq ft (vs $10.00)<br>
+                                ✓ <strong>100+ pieces:</strong> $6.50/sq ft (35% savings!)<br>
+                                ✓ <strong>Kiss-cut:</strong> Most cost-effective option<br>
+                                ✓ <strong>Minimum order:</strong> $35 total
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if selected_category == "Yard Signs" %}
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="per_unit_sku" class="form-label">Sign Type</label>
+                            <select name="per_unit_sku" class="form-select" required>
+                                {% for it in yard_items %}
+                                <option value="{{ it.sku }}" {% if form_data.get('per_unit_sku') == it.sku %}selected{% endif %}>{{ it.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="qty" class="form-label">Quantity</label>
+                            <input type="number" step="1" min="1" name="qty" value="{{ form_data.get('qty', '10') }}" class="form-control" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="add_stakes" class="form-label">H-Stakes</label>
+                            <select name="add_stakes" class="form-select">
+                                <option value="No" {% if form_data.get('add_stakes') == 'No' or not form_data.get('add_stakes') %}selected{% endif %}>No Stakes</option>
+                                <option value="Yes" {% if form_data.get('add_stakes') == 'Yes' %}selected{% endif %}>Add H-Stakes</option>
+                            </select>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if selected_category == "Poster" %}
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="media_name" class="form-label">Poster Material</label>
+                            <select name="media_name" class="form-select" required>
+                                {% for name, cost in material_options %}
+                                <option value="{{ name }}" {% if form_data.get('media_name') == name %}selected{% endif %}>{{ name }} - ${{ "%.2f"|format(cost) }}/sq ft</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="width_in" class="form-label">Width (inches)</label>
+                            <input type="number" step="0.01" name="width_in" value="{{ form_data.get('width_in', '24') }}" class="form-control" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="height_in" class="form-label">Height (inches)</label>
+                            <input type="number" step="0.01" name="height_in" value="{{ form_data.get('height_in', '36') }}" class="form-control" required>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="qty" class="form-label">Quantity</label>
+                            <input type="number" step="1" min="1" name="qty" value="{{ form_data.get('qty', '1') }}" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="coverage" class="form-label">Ink Coverage</label>
+                            <select name="coverage" class="form-select">
+                                <option value="Light" {% if form_data.get('coverage') == 'Light' %}selected{% endif %}>Light</option>
+                                <option value="Medium" {% if form_data.get('coverage') == 'Medium' or not form_data.get('coverage') %}selected{% endif %}>Medium</option>
+                                <option value="Heavy" {% if form_data.get('coverage') == 'Heavy' %}selected{% endif %}>Heavy</option>
+                            </select>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if selected_category == "Apparel" %}
+                    <div class="mb-3">
+                        <h6>Apparel Items</h6>
+                        <div class="row g-2 mb-2 text-muted small">
+                            <div class="col-md-4"><strong>Garment Type</strong></div>
+                            <div class="col-md-2"><strong>Size</strong></div>
+                            <div class="col-md-2"><strong>Quantity</strong></div>
+                            <div class="col-md-2"><strong>Extra Designs</strong></div>
+                            <div class="col-md-2"><strong>Action</strong></div>
+                        </div>
+                        <div id="apparelItems" class="mb-3"></div>
+                        <button class="btn btn-secondary btn-sm" type="button" onclick="addApparelItem()">+ Add Item</button>
+                        <div class="form-text">Pricing based on quantity tiers. Larger quantities get better pricing.</div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="rush" class="form-label">Production Time</label>
+                            <select name="rush" class="form-select">
+                                <option value="Standard">Standard (5-7 days)</option>
+                                <option value="Rush">Rush (2-3 days)</option>
+                            </select>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-4">
+                        <label for="notes" class="form-label">Special Instructions (Optional)</label>
+                        <textarea name="notes" class="form-control" rows="3" placeholder="Tell us about your project, colors, deadline, etc...">{{ form_data.get('notes', '') }}</textarea>
+                    </div>
+
+                    <!-- Customer Information Section -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="mb-0">💾 Save Quote & Contact Information</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="customer_name" class="form-label">Name</label>
+                                    <input type="text" name="customer_name" class="form-control" value="{{ form_data.get('customer_name', '') }}" placeholder="Your name">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="customer_email" class="form-label">Email</label>
+                                    <input type="email" name="customer_email" class="form-control" value="{{ form_data.get('customer_email', '') }}" placeholder="your@email.com">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="customer_phone" class="form-label">Phone (Optional)</label>
+                                    <input type="tel" name="customer_phone" class="form-control" value="{{ form_data.get('customer_phone', '') }}" placeholder="(555) 123-4567">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="customer_company" class="form-label">Company (Optional)</label>
+                                    <input type="text" name="customer_company" class="form-control" value="{{ form_data.get('customer_company', '') }}" placeholder="Company name">
+                                </div>
+                            </div>
+                            <div class="form-check mt-3">
+                                <input class="form-check-input" type="checkbox" name="save_quote" id="save_quote" value="yes" {% if form_data.get('save_quote') %}checked{% endif %}>
+                                <label class="form-check-label" for="save_quote">
+                                    Save this quote for future reference and email notifications
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-dark btn-lg fw-bold glow quote-btn" style="background: linear-gradient(45deg, #666666, #333333); border: none; font-size: 1.2rem; color: white;"><i class="fas fa-quote-right me-2"></i>Get Instant Quote</button>
+                        <small class="text-white-50 text-center"><i class="fas fa-save me-1"></i>Fill in your contact info above to save quotes and get email updates</small>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if result %}
+        <div class="card mt-4">
+            <div class="card-body">
+                {% if result.quote_saved %}
+                <div class="alert alert-success mb-3" role="alert">
+                    <h6 class="alert-heading">🎉 Quote Saved Successfully!</h6>
+                    <p class="mb-1">Your quote <strong>#{{ result.quote_number }}</strong> has been saved to our system.</p>
+                    <p class="mb-0">We'll send you updates at the email address provided.</p>
+                </div>
+                {% endif %}
+                
+                {% if result.warnings %}
+                {% for warning in result.warnings %}
+                <div class="alert alert-warning mb-3" role="alert">
+                    {{ warning }}
+                </div>
+                {% endfor %}
+                {% endif %}
+                
+                <h4 class="card-title text-success">Your Quote{% if result.quote_saved %} #{{ result.quote_number }}{% endif %}</h4>
+                
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="table-responsive">
+                            <table class="table table-borderless">
+                                {% if result.derived and result.derived.billable_sqft %}
+                                <tr>
+                                    <td><strong>Total Area:</strong></td>
+                                    <td class="text-end">{{ result.derived.billable_sqft }} sq ft</td>
+                                </tr>
+                                {% endif %}
+                                <tr>
+                                    <td><strong>Unit Price:</strong></td>
+                                    <td class="text-end">${{ result.totals.unit_price }}</td>
+                                </tr>
+                                <tr class="table-success">
+                                    <td><h5 class="mb-0">Total Price:</h5></td>
+                                    <td class="text-end"><h4 class="mb-0 text-success">${{ result.totals.quoted_price }}</h4></td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-primary">
+                            <div class="card-body text-center">
+                                <h2 class="card-title">${{ result.totals.quoted_price }}</h2>
+                                <p class="card-text">Ready in 3-5 business days</p>
+                                <a href="mailto:orders@printshop.com?subject=Quote Request&body=I would like to proceed with this quote for ${{ result.totals.quoted_price }}" class="btn btn-light">Order Now</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Always show volume pricing for banners -->
+                {% if selected_category == 'Decals' or form_data.get('category') == 'Decals' %}
+                <!-- DECALS QUANTITY BREAKS & SAVINGS DISPLAY -->
+                <div class="alert alert-success mt-4" role="alert">
+                    <h5 class="alert-heading">🏆 Professional Decal Volume Pricing - Bigger Orders = Bigger Savings!</h5>
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Quantity</th>
+                                            <th>Rate per sq ft</th>
+                                            <th>Your Savings</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="{% if form_data.get('qty')|int < 10 %}table-info{% endif %}">
+                                            <td><strong>1-9 pieces</strong></td>
+                                            <td>$10.00</td>
+                                            <td>{% if form_data.get('qty')|int < 10 %}<span class="badge bg-primary">Current</span>{% else %}-{% endif %}</td>
+                                        </tr>
+                                        <tr class="{% if form_data.get('qty')|int >= 10 and form_data.get('qty')|int < 25 %}table-info{% endif %}">
+                                            <td><strong>10-24 pieces</strong></td>
+                                            <td>$9.50</td>
+                                            <td>{% if form_data.get('qty')|int >= 10 and form_data.get('qty')|int < 25 %}<span class="badge bg-primary">Current</span>{% else %}<span class="text-success">Save $0.50/sq ft</span>{% endif %}</td>
+                                        </tr>
+                                        <tr class="{% if form_data.get('qty')|int >= 25 and form_data.get('qty')|int < 50 %}table-info{% endif %}">
+                                            <td><strong>25-49 pieces</strong></td>
+                                            <td>$9.00</td>
+                                            <td>{% if form_data.get('qty')|int >= 25 and form_data.get('qty')|int < 50 %}<span class="badge bg-primary">Current</span>{% else %}<span class="text-success">Save $1.00/sq ft</span>{% endif %}</td>
+                                        </tr>
+                                        <tr class="{% if form_data.get('qty')|int >= 50 and form_data.get('qty')|int < 100 %}table-info{% endif %}">
+                                            <td><strong>50-99 pieces</strong></td>
+                                            <td>$7.50</td>
+                                            <td>{% if form_data.get('qty')|int >= 50 and form_data.get('qty')|int < 100 %}<span class="badge bg-primary">Current</span>{% else %}<span class="text-success">Save $2.50/sq ft</span>{% endif %}</td>
+                                        </tr>
+                                        <tr class="{% if form_data.get('qty')|int >= 100 and form_data.get('qty')|int < 250 %}table-info{% endif %}">
+                                            <td><strong>100-249 pieces</strong></td>
+                                            <td>$6.50</td>
+                                            <td>{% if form_data.get('qty')|int >= 100 and form_data.get('qty')|int < 250 %}<span class="badge bg-primary">Current</span>{% else %}<span class="text-success">Save $3.50/sq ft (35%!)</span>{% endif %}</td>
+                                        </tr>
+                                        <tr class="{% if form_data.get('qty')|int >= 250 and form_data.get('qty')|int < 500 %}table-info{% endif %}">
+                                            <td><strong>250-499 pieces</strong></td>
+                                            <td>$5.50</td>
+                                            <td>{% if form_data.get('qty')|int >= 250 and form_data.get('qty')|int < 500 %}<span class="badge bg-primary">Current</span>{% else %}<span class="text-success">Save $4.50/sq ft (45%!)</span>{% endif %}</td>
+                                        </tr>
+                                        <tr class="{% if form_data.get('qty')|int >= 500 and form_data.get('qty')|int < 1000 %}table-info{% endif %}">
+                                            <td><strong>500-999 pieces</strong></td>
+                                            <td>$4.75</td>
+                                            <td>{% if form_data.get('qty')|int >= 500 and form_data.get('qty')|int < 1000 %}<span class="badge bg-primary">Current</span>{% else %}<span class="text-success">Save $5.25/sq ft (53%!)</span>{% endif %}</td>
+                                        </tr>
+                                        <tr class="{% if form_data.get('qty')|int >= 1000 %}table-info{% endif %}">
+                                            <td><strong>1000+ pieces</strong></td>
+                                            <td>$4.25</td>
+                                            <td>{% if form_data.get('qty')|int >= 1000 %}<span class="badge bg-primary">Current</span>{% else %}<span class="text-success">Save $5.75/sq ft (58%!)</span>{% endif %}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title">💡 Smart Ordering Guide</h6>
+                                    {% set current_qty = form_data.get('qty')|int %}
+                                    {% set area_sqft = (form_data.get('width_in', 0)|float * form_data.get('height_in', 0)|float / 144) %}
+                                    {% if current_qty < 25 %}
+                                        <p class="mb-2"><strong>Order 25 pieces instead:</strong><br>
+                                        Save ${{ "%.0f"|format((area_sqft * 1.00 * 25)) }} total!</p>
+                                    {% endif %}
+                                    {% if current_qty < 100 %}
+                                        <p class="mb-2"><strong>Order 100 pieces instead:</strong><br>
+                                        Save ${{ "%.0f"|format((area_sqft * 3.50 * 100)) }} total! <span class="badge bg-warning">35% OFF</span></p>
+                                    {% endif %}
+                                    {% if current_qty < 250 %}
+                                        <p class="mb-2"><strong>Order 250 pieces instead:</strong><br>
+                                        Save ${{ "%.0f"|format((area_sqft * 4.50 * 250)) }} total! <span class="badge bg-success">45% OFF</span></p>
+                                    {% endif %}
+                                    <div class="text-muted small">
+                                        <strong>Professional features included:</strong><br>
+                                        ✓ Eco-solvent printing<br>
+                                        ✓ Weather-resistant vinyl<br>
+                                        ✓ Kiss or die-cut options<br>
+                                        ✓ Optional lamination
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% elif selected_category == 'Banner' or form_data.get('category') == 'Banner' %}
+                <!-- BANNER QUANTITY BREAKS & SAVINGS DISPLAY -->
+                <div class="alert alert-warning mt-4" role="alert">
+                    <h5 class="alert-heading">💰 Volume Pricing - Save More with Higher Quantities!</h5>
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Quantity</th>
+                                            <th>Rate per sq ft</th>
+                                            <th>Your Savings</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="{% if form_data.get('qty')|int < 5 %}table-info{% endif %}">
+                                            <td><strong>1-4 pieces</strong></td>
+                                            <td>$5.75</td>
+                                            <td>{% if form_data.get('qty')|int < 5 %}<span class="badge bg-primary">Current</span>{% else %}-{% endif %}</td>
+                                        </tr>
+                                        <tr class="{% if form_data.get('qty')|int >= 5 and form_data.get('qty')|int < 10 %}table-info{% endif %}">
+                                            <td><strong>5-9 pieces</strong></td>
+                                            <td>$5.25</td>
+                                            <td>{% if form_data.get('qty')|int >= 5 and form_data.get('qty')|int < 10 %}<span class="badge bg-primary">Current</span>{% else %}<span class="text-success">Save $0.50/sq ft</span>{% endif %}</td>
+                                        </tr>
+                                        <tr class="{% if form_data.get('qty')|int >= 10 and form_data.get('qty')|int < 25 %}table-info{% endif %}">
+                                            <td><strong>10-24 pieces</strong></td>
+                                            <td>$4.85</td>
+                                            <td>{% if form_data.get('qty')|int >= 10 and form_data.get('qty')|int < 25 %}<span class="badge bg-primary">Current</span>{% else %}<span class="text-success">Save $0.90/sq ft</span>{% endif %}</td>
+                                        </tr>
+                                        <tr class="{% if form_data.get('qty')|int >= 25 and form_data.get('qty')|int < 50 %}table-info{% endif %}">
+                                            <td><strong>25-49 pieces</strong></td>
+                                            <td>$4.50</td>
+                                            <td>{% if form_data.get('qty')|int >= 25 and form_data.get('qty')|int < 50 %}<span class="badge bg-primary">Current</span>{% else %}<span class="text-success">Save $1.25/sq ft</span>{% endif %}</td>
+                                        </tr>
+                                        <tr class="{% if form_data.get('qty')|int >= 50 and form_data.get('qty')|int < 100 %}table-info{% endif %}">
+                                            <td><strong>50-99 pieces</strong></td>
+                                            <td>$4.25</td>
+                                            <td>{% if form_data.get('qty')|int >= 50 and form_data.get('qty')|int < 100 %}<span class="badge bg-primary">Current</span>{% else %}<span class="text-success">Save $1.50/sq ft</span>{% endif %}</td>
+                                        </tr>
+                                        <tr class="{% if form_data.get('qty')|int >= 100 %}table-info{% endif %}">
+                                            <td><strong>100+ pieces</strong></td>
+                                            <td>$3.95</td>
+                                            <td>{% if form_data.get('qty')|int >= 100 %}<span class="badge bg-primary">Current</span>{% else %}<span class="text-success">Save $1.80/sq ft</span>{% endif %}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title">💡 Quick Savings Calculator</h6>
+                                    {% set current_qty = form_data.get('qty')|int %}
+                                    {% set area_sqft = (form_data.get('width_in', 0)|float * form_data.get('height_in', 0)|float / 144) %}
+                                    {% if current_qty < 5 %}
+                                        <p class="mb-2"><strong>Order 5 pieces instead:</strong><br>
+                                        Save ${{ "%.0f"|format((area_sqft * 0.50 * 5)) }} total!</p>
+                                    {% endif %}
+                                    {% if current_qty < 10 %}
+                                        <p class="mb-2"><strong>Order 10 pieces instead:</strong><br>
+                                        Save ${{ "%.0f"|format((area_sqft * 0.90 * 10)) }} total!</p>
+                                    {% endif %}
+                                    {% if current_qty < 25 %}
+                                        <p class="mb-2"><strong>Order 25 pieces instead:</strong><br>
+                                        Save ${{ "%.0f"|format((area_sqft * 1.25 * 25)) }} total!</p>
+                                    {% endif %}
+                                    <div class="text-muted small">
+                                        <strong>All banners include:</strong><br>
+                                        ✓ Hemmed edges<br>
+                                        ✓ Grommets for hanging<br>
+                                        ✓ Weather-resistant materials
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="alert alert-info mt-3" role="alert">
+                    <h6 class="alert-heading">What's Next?</h6>
+                    <ul class="mb-0">
+                        <li>Send us your artwork files</li>
+                        <li>We'll review and confirm final pricing</li>
+                        <li>Production begins after approval</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="mt-5">
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">Fast Turnaround</h5>
+                            <p class="card-text">Most orders ready in 3-5 business days. Rush service available.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">Quality Materials</h5>
+                            <p class="card-text">Professional-grade materials for indoor and outdoor applications.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">Expert Support</h5>
+                            <p class="card-text">Our team helps you choose the right materials and finishing options.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chatbot Widget -->
+    <div class="chat-widget">
+        <button class="chat-toggle" onclick="toggleChat()">
+            <i class="fas fa-comments"></i>
+        </button>
+        
+        <div class="chat-window" id="chatWindow">
+            <div class="chat-header">
+                <div>
+                    <strong>🤖 DTF Assistant</strong>
+                    <br><small>Ask me anything about printing!</small>
+                </div>
+                <button onclick="toggleChat()" style="background: none; border: none; color: white; font-size: 20px;">×</button>
+            </div>
+            
+            <div class="chat-messages" id="chatMessages">
+                <div class="message ai">
+                    <div class="content">
+                        Hi! I'm your DTF Designs assistant. I can help with questions about materials, pricing, turnaround times, and more. What would you like to know?
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chat-input-area">
+                <div class="d-flex">
+                    <input type="text" class="chat-input" id="chatInput" placeholder="Ask me anything..." onkeypress="handleChatKeypress(event)">
+                    <button class="chat-send" onclick="sendMessage()">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Live preview and automation features
+        function updateLivePreview() {
+            const width = parseFloat(document.querySelector('input[name="width_in"]')?.value || 0);
+            const height = parseFloat(document.querySelector('input[name="height_in"]')?.value || 0);
+            const qty = parseInt(document.querySelector('input[name="qty"]')?.value || 1);
+            
+            if (width && height) {
+                const sqft = (width * height / 144).toFixed(2);
+                const totalSqft = (sqft * qty).toFixed(2);
+                
+                // Create or update preview
+                let preview = document.getElementById('livePreview');
+                if (!preview) {
+                    preview = document.createElement('div');
+                    preview.id = 'livePreview';
+                    preview.className = 'price-preview text-white';
+                    document.querySelector('.quote-section .card-body').appendChild(preview);
+                }
+                
+                preview.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>📐 ${width}" x ${height}" = ${sqft} sq ft each</strong><br>
+                            <small>Total: ${totalSqft} sq ft (${qty} pieces)</small>
+                        </div>
+                        <div class="text-end">
+                            <div class="badge bg-secondary">Live Calculation</div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+
+
+        // Chatbot Functions
+        function toggleChat() {
+            const chatWindow = document.getElementById('chatWindow');
+            chatWindow.style.display = chatWindow.style.display === 'none' || !chatWindow.style.display ? 'block' : 'none';
+        }
+
+        function handleChatKeypress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            // Add user message to chat
+            addMessage(message, 'user');
+            input.value = '';
+
+            // Show typing indicator
+            const typingDiv = addMessage('Thinking...', 'ai', true);
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message })
+                });
+
+                const data = await response.json();
+                
+                // Remove typing indicator
+                typingDiv.remove();
+
+                if (data.success) {
+                    addMessage(data.response, 'ai');
+                } else {
+                    addMessage('Sorry, I had trouble understanding that. Could you try rephrasing?', 'ai');
+                }
+            } catch (error) {
+                typingDiv.remove();
+                addMessage('Sorry, I\'m having connection issues. Please try again.', 'ai');
+            }
+        }
+
+        function addMessage(text, sender, isTemporary = false) {
+            const messagesContainer = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            if (isTemporary) messageDiv.classList.add('temporary');
+            
+            messageDiv.innerHTML = `<div class="content">${text}</div>`;
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            
+            return messageDiv;
+        }
+
+        // Apparel item management
+        const garments = {{ apparel_garments|tojson }};
+        const sizes = {{ size_options|tojson }};
+        let itemIndex = 0;
+
+        function createSelectOptions(list) {
+            return list.map(v => `<option value="${v}">${v}</option>`).join('');
+        }
+
+        function addApparelItem() {
+            const container = document.getElementById('apparelItems');
+            const itemHTML = `
+                <div class="row g-2 mb-2 apparel-item" id="item-${itemIndex}">
+                    <div class="col-md-4">
+                        <select name="items-${itemIndex}-garment" class="form-select form-select-sm">
+                            ${createSelectOptions(garments)}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <select name="items-${itemIndex}-size" class="form-select form-select-sm">
+                            ${createSelectOptions(sizes)}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <input name="items-${itemIndex}-qty" type="number" min="1" value="12" class="form-control form-control-sm" placeholder="Qty">
+                    </div>
+                    <div class="col-md-2">
+                        <input name="items-${itemIndex}-extras" type="number" min="0" value="0" class="form-control form-control-sm" placeholder="Extra designs">
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeApparelItem(${itemIndex})">Remove</button>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', itemHTML);
+            itemIndex++;
+        }
+
+        function removeApparelItem(index) {
+            const element = document.getElementById(`item-${index}`);
+            if (element) {
+                element.remove();
+            }
+        }
+
+        // Add initial apparel item if in apparel category
+        {% if selected_category == "Apparel" %}
+        addApparelItem();
+        {% endif %}
+        
+        // Banner Size Selection Function
+        function updateBannerSize() {
+            const sizeSelect = document.getElementById('banner-size-select');
+            const widthInput = document.getElementById('custom-width');
+            const heightInput = document.getElementById('custom-height');
+            
+            if (sizeSelect && sizeSelect.value !== 'custom') {
+                const [width, height] = sizeSelect.value.split('x');
+                widthInput.value = width;
+                heightInput.value = height;
+            }
+        }
+        
+    </script>
+</body>
+</html>

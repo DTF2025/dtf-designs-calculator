@@ -1,0 +1,23 @@
+{
+  "generated": "2025-08-30",
+  "materials_cost_per_sqft": {
+    "eco_gloss": 0.45,
+    "eco_matte": 0.42,
+    "cast_vinyl": 0.70
+  },
+  "ink_cost_per_sqft": 0.20,
+  "machine_overhead_per_sqft": 0.25,
+  "laminate_cost_per_sqft": 0.35,
+  "cut_cost_per_sqft": {
+    "kiss": 0.30,
+    "die": 0.60
+  },
+  "intricate_cut_multiplier": 1.15,
+  "small_piece_fee_each": {
+    "under_1in": 0.10,
+    "under_2in": 0.05
+  },
+  "setup_cost_per_job": 3.00,
+  "packaging_cost_per_job": 1.00,
+  "floor_margin_pct": 0.30
+}

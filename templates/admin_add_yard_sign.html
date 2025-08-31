@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DTF Designs - Add Yard Sign</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container py-5">
+        <h1 class="mb-4">Add New Yard Sign</h1>
+        
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <div class="mb-3">
+            <a href="{{ url_for('admin_yard_signs') }}" class="btn btn-secondary">← Back to Yard Signs</a>
+        </div>
+        
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <form method="POST">
+                            <div class="mb-3">
+                                <label for="name" class="form-label">Product Name</label>
+                                <input type="text" class="form-control" name="name" id="name" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="sku" class="form-label">SKU</label>
+                                <input type="text" class="form-control" name="sku" id="sku" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="blank_cost" class="form-label">Blank Cost</label>
+                                <input type="number" step="0.01" class="form-control" name="blank_cost" id="blank_cost" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="print_cost" class="form-label">Print Cost</label>
+                                <input type="number" step="0.01" class="form-control" name="print_cost" id="print_cost" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="stake_cost" class="form-label">Stake Cost</label>
+                                <input type="number" step="0.01" class="form-control" name="stake_cost" id="stake_cost" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="retail_price" class="form-label">Retail Price</label>
+                                <input type="number" step="0.01" class="form-control" name="retail_price" id="retail_price" required>
+                            </div>
+                            
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-success">Add Yard Sign</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

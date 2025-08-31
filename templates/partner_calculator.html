@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>💼 DTF Designs Partner Portal 💼</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        @keyframes sparkle {
+            0%, 100% { transform: scale(1) rotate(0deg); }
+            50% { transform: scale(1.1) rotate(5deg); }
+        }
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-10px); }
+            60% { transform: translateY(-5px); }
+        }
+        .fade-in { animation: fadeInUp 0.8s ease-out; }
+        .card { transition: all 0.3s ease; border: none; box-shadow: 0 8px 25px rgba(0,0,0,0.15); }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 15px 35px rgba(0,0,0,0.2); }
+        .btn { transition: all 0.3s ease; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .form-control:focus { transform: scale(1.02); box-shadow: 0 0 20px rgba(102, 102, 102, 0.3); }
+        .partner-hero { background: linear-gradient(135deg, #000000 0%, #333333 100%); padding: 3rem 0; margin: -2rem -15px 2rem -15px; border-bottom: 3px solid #666666; }
+        .price-highlight { animation: pulse 2s infinite; }
+        .feature-icon { font-size: 3rem; color: #666666; animation: bounce 2s infinite; }
+        .partner-section { background: linear-gradient(135deg, #555555 0%, #333333 100%); border-radius: 20px; }
+        .glow { box-shadow: 0 0 30px rgba(102, 102, 102, 0.5); }
+        .discount-badge { animation: sparkle 3s infinite; background: linear-gradient(45deg, #28a745, #20c997); }
+        .partner-card { background: linear-gradient(45deg, #666666, #000000); transition: all 0.3s ease; }
+        .partner-card:hover { background: linear-gradient(45deg, #000000, #666666); }
+        
+        /* Chatbot Styles */
+        .chat-widget { position: fixed; bottom: 20px; right: 20px; z-index: 1000; }
+        .chat-toggle { background: linear-gradient(45deg, #333333, #666666); width: 60px; height: 60px; border-radius: 50%; border: none; color: white; font-size: 24px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: all 0.3s ease; }
+        .chat-toggle:hover { transform: scale(1.1); box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
+        .chat-window { display: none; position: fixed; bottom: 90px; right: 20px; width: 350px; height: 500px; background: #333; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 1001; }
+        .chat-header { background: linear-gradient(45deg, #333333, #666666); color: white; padding: 15px; border-radius: 15px 15px 0 0; display: flex; justify-content: between; align-items: center; }
+        .chat-messages { height: 350px; overflow-y: auto; padding: 15px; background: #222; }
+        .chat-input-area { padding: 15px; background: #333; border-radius: 0 0 15px 15px; }
+        .message { margin-bottom: 15px; }
+        .message.user { text-align: right; }
+        .message.ai { text-align: left; }
+        .message .content { display: inline-block; padding: 10px 15px; border-radius: 18px; max-width: 80%; }
+        .message.user .content { background: #666; color: white; }
+        .message.ai .content { background: #555; color: white; }
+        .chat-input { width: 100%; padding: 10px; border: 1px solid #666; border-radius: 20px; background: #444; color: white; }
+        .chat-send { background: #666; border: none; color: white; padding: 8px 15px; border-radius: 20px; margin-left: 10px; }
+    </style>
+</head>
+<body>
+    <div class="partner-hero text-center text-white">
+        <div class="container">
+            <div class="fade-in">
+                <img src="{{ url_for('static', filename='images/dtf-logo.png') }}" alt="DTF Designs Logo" class="img-fluid mb-3" style="max-width: 400px; height: auto; filter: drop-shadow(0 5px 15px rgba(0,0,0,0.3));">
+                <h1 class="display-4 fw-bold mb-3">💼 Partner Portal 💼</h1>
+                <div class="badge discount-badge fs-5 px-4 py-2 mb-3">🎉 30% Partner Discount Applied! 🎉</div>
+                <p class="lead mb-4">Exclusive wholesale pricing for our valued partners!</p>
+                <div class="d-flex justify-content-center gap-3">
+                    <a href="{{ url_for('admin_login') }}" class="btn btn-outline-light"><i class="fas fa-user-shield"></i> Admin Portal</a>
+                    <a href="{{ url_for('partner_logout') }}" class="btn btn-danger"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="container py-4">
+        
+        <div class="alert alert-info" role="alert">
+            <small>Final pricing subject to artwork review and finishing options.</small>
+        </div>
+
+        {% if error %}
+        <div class="alert alert-danger" role="alert">
+            <strong>Error:</strong> {{ error }}
+        </div>
+        {% endif %}
+
+        <div class="card partner-section glow fade-in">
+            <div class="card-body">
+                <h5 class="card-title text-white fw-bold"><i class="fas fa-calculator me-2"></i>Get Your Partner Quote 💰</h5>
+                <form method="POST" id="quoteForm">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-12">
+                            <label for="category" class="form-label">Product Category</label>
+                            <select name="category" id="category" class="form-select" onchange="document.getElementById('quoteForm').submit()">
+                                {% for c in categories %}
+                                <option value="{{ c }}" {% if c == selected_category %}selected{% endif %}>{{ c }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    {% if selected_category == "Banner" %}
+                    <div class="banner-section">
+                        <h4 class="text-white mb-4"><i class="fas fa-flag me-2"></i>Vinyl Banners - Partner Pricing</h4>
+                        <p class="text-muted mb-3">Professional 13oz vinyl banners with hems + grommets included. 30% Partner Discount Applied!</p>
+                        
+                        <!-- Partner Pricing Display -->
+                        <div class="pricing-info p-3 mb-4" style="background: #2a2a2a; border-radius: 8px; border-left: 4px solid #28a745;">
+                            <h6 class="text-success mb-2"><i class="fas fa-handshake me-2"></i>Partner Pricing (30% Off Retail)</h6>
+                            <div class="row text-sm">
+                                <div class="col-md-6">
+                                    <small class="text-muted d-block">Partner Rates (per sq ft):</small>
+                                    <small>1-4: <span class="text-success">$4.03</span> | 5-9: <span class="text-success">$3.68</span> | 10-24: <span class="text-success">$3.40</span></small>
+                                </div>
+                                <div class="col-md-6">
+                                    <small class="text-muted d-block">Volume Partner Pricing:</small>
+                                    <small>25-49: <span class="text-success">$3.15</span> | 50-99: <span class="text-success">$2.98</span> | 100+: <span class="text-success">$2.77</span></small>
+                                </div>
+                            </div>
+                            <small class="text-muted d-block mt-2"><i class="fas fa-star me-1"></i>Partner exclusive pricing. Hems, grommets & waste buffer included.</small>
+                        </div>
+                    
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="media_name" class="form-label">Banner Material</label>
+                            <select name="media_name" class="form-select" required>
+                                <option value="alpha" {% if form_data.get('media_name') == 'alpha' %}selected{% endif %}>ALPHA Premium Matte Frontlit Banner 13oz</option>
+                                <option value="jetflex" {% if form_data.get('media_name') == 'jetflex' %}selected{% endif %}>JetFlex® FL Gloss White 13oz (+$0.25/sqft)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Banner Size <small class="text-muted">(W×H)</small></label>
+                            <select class="form-select" id="partner-banner-size-select" onchange="updatePartnerBannerSize()">
+                                <option value="custom">Custom Size...</option>
+                                <option value="24x12">2' × 1' (24"W × 12"H)</option>
+                                <option value="36x18">3' × 1.5' (36"W × 18"H)</option>
+                                <option value="48x24" selected>4' × 2' (48"W × 24"H)</option>
+                                <option value="72x24">6' × 2' (72"W × 24"H)</option>
+                                <option value="48x36">4' × 3' (48"W × 36"H)</option>
+                                <option value="72x36">6' × 3' (72"W × 36"H)</option>
+                                <option value="96x36">8' × 3' (96"W × 36"H)</option>
+                                <option value="72x48">6' × 4' (72"W × 48"H)</option>
+                                <option value="96x48">8' × 4' (96"W × 48"H)</option>
+                            </select>
+                            <small class="text-muted">Width × Height orientation</small>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <label for="width_in" class="form-label">Width (inches)</label>
+                            <input type="number" step="0.01" name="width_in" id="partner-custom-width" value="{{ form_data.get('width_in', '48') }}" class="form-control" required min="12" max="144">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="height_in" class="form-label">Height (inches)</label>
+                            <input type="number" step="0.01" name="height_in" id="partner-custom-height" value="{{ form_data.get('height_in', '24') }}" class="form-control" required min="12" max="144">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="qty" class="form-label">Quantity</label>
+                            <input type="number" step="1" min="1" name="qty" value="{{ form_data.get('qty', '1') }}" class="form-control" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="sides" class="form-label">Print Sides</label>
+                            <select name="sides" class="form-select">
+                                <option value="1" {% if form_data.get('sides') == '1' or not form_data.get('sides') %}selected{% endif %}>Single-sided</option>
+                                <option value="2" {% if form_data.get('sides') == '2' %}selected{% endif %}>Double-sided</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label for="coverage" class="form-label">Ink Coverage</label>
+                            <select name="coverage" class="form-select">
+                                <option value="Light" {% if form_data.get('coverage') == 'Light' %}selected{% endif %}>Light</option>
+                                <option value="Medium" {% if form_data.get('coverage') == 'Medium' or not form_data.get('coverage') %}selected{% endif %}>Medium</option>
+                                <option value="Heavy" {% if form_data.get('coverage') == 'Heavy' %}selected{% endif %}>Heavy</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="hem_opt" class="form-label">Reinforced Edges</label>
+                            <select name="hem_opt" class="form-select">
+                                <option value="All" {% if form_data.get('hem_opt') == 'All' or not form_data.get('hem_opt') %}selected{% endif %}>Hems Included ✓</option>
+                                <option value="None" {% if form_data.get('hem_opt') == 'None' %}selected{% endif %}>No Hems</option>
+                                <option value="Top&Bottom" {% if form_data.get('hem_opt') == 'Top&Bottom' %}selected{% endif %}>Top & Bottom Only</option>
+                            </select>
+                            <small class="text-success">Hems included in partner pricing</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="grommets" class="form-label">Grommets</label>
+                            <input name="grommets" type="number" min="0" max="50" value="{{ form_data.get('grommets', '8') }}" class="form-control" placeholder="Number of grommets">
+                            <small class="text-success">Grommets included (~every 2 ft)</small>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="rush" class="form-label">Production Time</label>
+                            <select name="rush" class="form-select">
+                                <option value="Standard" {% if form_data.get('rush') == 'Standard' or not form_data.get('rush') %}selected{% endif %}>Standard (3-5 days)</option>
+                                <option value="Rush" {% if form_data.get('rush') == 'Rush' %}selected{% endif %}>Rush (1-2 days)</option>
+                            </select>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if selected_category == "Decals" %}
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="media_name" class="form-label">Vinyl Material</label>
+                            <select name="media_name" class="form-select" required>
+                                <option value="alpha" {% if form_data.get('media_name') == 'alpha' %}selected{% endif %}>ALPHA Premium Matte Frontlit Banner 13oz</option>
+                                <option value="jetflex" {% if form_data.get('media_name') == 'jetflex' %}selected{% endif %}>JetFlex® FL Gloss White 13oz (+$0.25/sqft)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="width_in" class="form-label">Width (inches)</label>
+                            <input type="number" step="0.01" name="width_in" value="{{ form_data.get('width_in', '12') }}" class="form-control" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="height_in" class="form-label">Height (inches)</label>
+                            <input type="number" step="0.01" name="height_in" value="{{ form_data.get('height_in', '6') }}" class="form-control" required>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="qty" class="form-label">Quantity</label>
+                            <input type="number" step="1" min="1" name="qty" value="{{ form_data.get('qty', '10') }}" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="coverage" class="form-label">Ink Coverage</label>
+                            <select name="coverage" class="form-select">
+                                <option value="Light" {% if form_data.get('coverage') == 'Light' %}selected{% endif %}>Light</option>
+                                <option value="Medium" {% if form_data.get('coverage') == 'Medium' or not form_data.get('coverage') %}selected{% endif %}>Medium</option>
+                                <option value="Heavy" {% if form_data.get('coverage') == 'Heavy' %}selected{% endif %}>Heavy</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="laminate_name" class="form-label">Protective Laminate</label>
+                            <select name="laminate_name" class="form-select">
+                                <option value="" {% if not form_data.get('laminate_name') %}selected{% endif %}>None</option>
+                                {% for name, cost in laminate_options_with_pricing %}
+                                <option value="{{ name }}" {% if form_data.get('laminate_name') == name %}selected{% endif %}>{{ name }} - ${{ "%.2f"|format(cost) }}/sq ft</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="rush" class="form-label">Production Time</label>
+                            <select name="rush" class="form-select">
+                                <option value="Standard" {% if form_data.get('rush') == 'Standard' or not form_data.get('rush') %}selected{% endif %}>Standard (3-5 days)</option>
+                                <option value="Rush" {% if form_data.get('rush') == 'Rush' %}selected{% endif %}>Rush (1-2 days)</option>
+                            </select>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if selected_category == "Yard Signs" %}
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="per_unit_sku" class="form-label">Sign Type</label>
+                            <select name="per_unit_sku" class="form-select" required>
+                                {% for it in yard_items %}
+                                <option value="{{ it.sku }}" {% if form_data.get('per_unit_sku') == it.sku %}selected{% endif %}>{{ it.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="qty" class="form-label">Quantity</label>
+                            <input type="number" step="1" min="1" name="qty" value="{{ form_data.get('qty', '10') }}" class="form-control" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="add_stakes" class="form-label">H-Stakes</label>
+                            <select name="add_stakes" class="form-select">
+                                <option value="No" {% if form_data.get('add_stakes') == 'No' or not form_data.get('add_stakes') %}selected{% endif %}>No Stakes</option>
+                                <option value="Yes" {% if form_data.get('add_stakes') == 'Yes' %}selected{% endif %}>Add H-Stakes</option>
+                            </select>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if selected_category == "Poster" %}
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="media_name" class="form-label">Poster Material</label>
+                            <select name="media_name" class="form-select" required>
+                                <option value="alpha" {% if form_data.get('media_name') == 'alpha' %}selected{% endif %}>ALPHA Premium Matte Frontlit Banner 13oz</option>
+                                <option value="jetflex" {% if form_data.get('media_name') == 'jetflex' %}selected{% endif %}>JetFlex® FL Gloss White 13oz (+$0.25/sqft)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="width_in" class="form-label">Width (inches)</label>
+                            <input type="number" step="0.01" name="width_in" value="{{ form_data.get('width_in', '24') }}" class="form-control" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="height_in" class="form-label">Height (inches)</label>
+                            <input type="number" step="0.01" name="height_in" value="{{ form_data.get('height_in', '36') }}" class="form-control" required>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="qty" class="form-label">Quantity</label>
+                            <input type="number" step="1" min="1" name="qty" value="1" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="coverage" class="form-label">Ink Coverage</label>
+                            <select name="coverage" class="form-select">
+                                <option value="Light">Light</option>
+                                <option value="Medium" selected>Medium</option>
+                                <option value="Heavy">Heavy</option>
+                            </select>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if selected_category == "Apparel" %}
+                    <div class="mb-3">
+                        <h6>Apparel Items</h6>
+                        <div class="row g-2 mb-2 text-muted small">
+                            <div class="col-md-4"><strong>Garment Type</strong></div>
+                            <div class="col-md-2"><strong>Size</strong></div>
+                            <div class="col-md-2"><strong>Quantity</strong></div>
+                            <div class="col-md-2"><strong>Extra Designs</strong></div>
+                            <div class="col-md-2"><strong>Action</strong></div>
+                        </div>
+                        <div id="apparelItems" class="mb-3"></div>
+                        <button class="btn btn-secondary btn-sm" type="button" onclick="addApparelItem()">+ Add Item</button>
+                        <div class="form-text">Pricing based on quantity tiers. Larger quantities get better pricing.</div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="rush" class="form-label">Production Time</label>
+                            <select name="rush" class="form-select">
+                                <option value="Standard">Standard (5-7 days)</option>
+                                <option value="Rush">Rush (2-3 days)</option>
+                            </select>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-4">
+                        <label for="notes" class="form-label">Special Instructions (Optional)</label>
+                        <textarea name="notes" class="form-control" rows="3" placeholder="Tell us about your project, colors, deadline, etc..."></textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-dark btn-lg fw-bold glow" style="background: linear-gradient(45deg, #666666, #333333); border: none; font-size: 1.2rem; color: white;"><i class="fas fa-quote-right me-2"></i>Get Partner Quote</button>
+                </form>
+            </div>
+        </div>
+
+        {% if result %}
+        <div class="card mt-4">
+            <div class="card-body">
+                <h4 class="card-title text-success price-highlight"><i class="fas fa-handshake me-2"></i>🎉 Your Partner Quote 🎉</h4>
+                
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="table-responsive">
+                            <table class="table table-borderless">
+                                {% if result.derived and result.derived.billable_sqft %}
+                                <tr>
+                                    <td><strong>Total Area:</strong></td>
+                                    <td class="text-end">{{ result.derived.billable_sqft }} sq ft</td>
+                                </tr>
+                                {% endif %}
+                                <tr>
+                                    <td><strong>Unit Price:</strong></td>
+                                    <td class="text-end">${{ result.totals.unit_price }}</td>
+                                </tr>
+                                {% if result.original_cost %}
+                                <tr>
+                                    <td><strong>Regular Price:</strong></td>
+                                    <td class="text-end text-decoration-line-through">${{ "%.2f"|format(result.original_cost) }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Discount ({{ result.partner_discount }}%):</strong></td>
+                                    <td class="text-end text-success">-${{ "%.2f"|format(result.savings) }}</td>
+                                </tr>
+                                <tr class="table-success">
+                                    <td><h5 class="mb-0">Your Cost:</h5></td>
+                                    <td class="text-end"><h4 class="mb-0 text-success">${{ "%.2f"|format(result.total_cost) }}</h4></td>
+                                </tr>
+                                <tr class="table-info">
+                                    <td><strong>Suggested Retail Price:</strong></td>
+                                    <td class="text-end"><strong>${{ "%.2f"|format(result.suggested_retail) }}</strong></td>
+                                </tr>
+                                {% else %}
+                                <tr class="table-success">
+                                    <td><h5 class="mb-0">Total Price:</h5></td>
+                                    <td class="text-end"><h4 class="mb-0 text-success">${{ result.totals.quoted_price }}</h4></td>
+                                </tr>
+                                {% endif %}
+                            </table>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card" style="background: linear-gradient(135deg, #ffd700 0%, #ff6b35 100%); transform: rotate(-2deg);">
+                            <div class="card-body text-center text-white">
+                                {% if result.original_cost %}
+                                <p class="mb-1">Regular Price: <span class="text-decoration-line-through">${{ "%.2f"|format(result.original_cost) }}</span></p>
+                                <p class="text-success fw-bold mb-1">💰 Your Discount ({{ result.partner_discount }}%): -${{ "%.2f"|format(result.savings) }}</p>
+                                <h2 class="card-title price-highlight">💵 ${{ "%.2f"|format(result.total_cost) }}</h2>
+                                <p class="card-text fw-bold">Your Partner Cost</p>
+                                <hr class="my-2">
+                                <p class="mb-1"><small>Suggested Retail Price:</small></p>
+                                <h4 class="text-dark">💰 ${{ "%.2f"|format(result.suggested_retail) }}</h4>
+                                {% else %}
+                                <h2 class="card-title price-highlight">💰 ${{ result.totals.quoted_price }}</h2>
+                                <p class="card-text"><i class="fas fa-clock me-2"></i>Ready in 3-5 business days</p>
+                                {% endif %}
+                                <a href="mailto:orders@printshop.com?subject=Partner Quote Request&body=I would like to proceed with this partner quote for ${{ result.total_cost or result.totals.quoted_price }}" class="btn btn-dark btn-lg fw-bold"><i class="fas fa-shopping-cart me-2"></i>Order Now! 🛒</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-info mt-3" role="alert">
+                    <h6 class="alert-heading">What's Next?</h6>
+                    <ul class="mb-0">
+                        <li>Send us your artwork files</li>
+                        <li>We'll review and confirm final pricing</li>
+                        <li>Production begins after approval</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="mt-5">
+            <div class="row g-4">
+                <div class="col-md-4 fade-in">
+                    <div class="card h-100 partner-card text-white">
+                        <div class="card-body text-center">
+                            <div class="feature-icon"><i class="fas fa-tachometer-alt"></i></div>
+                            <h5 class="card-title fw-bold">⚡ Priority Processing</h5>
+                            <p class="card-text">Partners get priority processing! Fast turnaround with dedicated support team.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 fade-in">
+                    <div class="card h-100 partner-card text-white" style="animation-delay: 0.2s;">
+                        <div class="card-body text-center">
+                            <div class="feature-icon"><i class="fas fa-percentage"></i></div>
+                            <h5 class="card-title fw-bold">💰 30% Discount</h5>
+                            <p class="card-text">Exclusive partner pricing on all products. Maximize your margins with wholesale costs!</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 fade-in">
+                    <div class="card h-100 partner-card text-white" style="animation-delay: 0.4s;">
+                        <div class="card-body text-center">
+                            <div class="feature-icon"><i class="fas fa-headset"></i></div>
+                            <h5 class="card-title fw-bold">🤝 Dedicated Support</h5>
+                            <p class="card-text">Personal account manager and priority support. We're here to help your business grow!</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chatbot Widget -->
+    <div class="chat-widget">
+        <button class="chat-toggle" onclick="toggleChat()">
+            <i class="fas fa-comments"></i>
+        </button>
+        
+        <div class="chat-window" id="chatWindow">
+            <div class="chat-header">
+                <div>
+                    <strong>🤖 DTF Assistant</strong>
+                    <br><small>Partner support at your service!</small>
+                </div>
+                <button onclick="toggleChat()" style="background: none; border: none; color: white; font-size: 20px;">×</button>
+            </div>
+            
+            <div class="chat-messages" id="chatMessages">
+                <div class="message ai">
+                    <div class="content">
+                        Hi partner! I'm here to help with wholesale pricing, bulk orders, material specifications, and any questions about our printing services. How can I assist you today?
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chat-input-area">
+                <div class="d-flex">
+                    <input type="text" class="chat-input" id="chatInput" placeholder="Ask me anything..." onkeypress="handleChatKeypress(event)">
+                    <button class="chat-send" onclick="sendMessage()">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Apparel item management
+        const garments = {{ apparel_garments|tojson }};
+        const sizes = {{ size_options|tojson }};
+        let itemIndex = 0;
+
+        function createSelectOptions(list) {
+            return list.map(v => `<option value="${v}">${v}</option>`).join('');
+        }
+
+        function addApparelItem() {
+            const container = document.getElementById('apparelItems');
+            const itemHTML = `
+                <div class="row g-2 mb-2 apparel-item" id="item-${itemIndex}">
+                    <div class="col-md-4">
+                        <select name="items-${itemIndex}-garment" class="form-select form-select-sm">
+                            ${createSelectOptions(garments)}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <select name="items-${itemIndex}-size" class="form-select form-select-sm">
+                            ${createSelectOptions(sizes)}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <input name="items-${itemIndex}-qty" type="number" min="1" value="12" class="form-control form-control-sm" placeholder="Qty">
+                    </div>
+                    <div class="col-md-2">
+                        <input name="items-${itemIndex}-extras" type="number" min="0" value="0" class="form-control form-control-sm" placeholder="Extra designs">
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeApparelItem(${itemIndex})">Remove</button>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', itemHTML);
+            itemIndex++;
+        }
+
+        function removeApparelItem(index) {
+            const element = document.getElementById(`item-${index}`);
+            if (element) {
+                element.remove();
+            }
+        }
+
+        // Add initial apparel item if in apparel category
+        {% if selected_category == "Apparel" %}
+        addApparelItem();
+        {% endif %}
+
+        // Chatbot Functions
+        function toggleChat() {
+            const chatWindow = document.getElementById('chatWindow');
+            chatWindow.style.display = chatWindow.style.display === 'none' || !chatWindow.style.display ? 'block' : 'none';
+        }
+
+        function handleChatKeypress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            // Add user message to chat
+            addMessage(message, 'user');
+            input.value = '';
+
+            // Show typing indicator
+            const typingDiv = addMessage('Thinking...', 'ai', true);
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message })
+                });
+
+                const data = await response.json();
+                
+                // Remove typing indicator
+                typingDiv.remove();
+
+                if (data.success) {
+                    addMessage(data.response, 'ai');
+                } else {
+                    addMessage('Sorry, I had trouble understanding that. Could you try rephrasing?', 'ai');
+                }
+            } catch (error) {
+                typingDiv.remove();
+                addMessage('Sorry, I\'m having connection issues. Please try again.', 'ai');
+            }
+        }
+
+        function addMessage(text, sender, isTemporary = false) {
+            const messagesContainer = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            if (isTemporary) messageDiv.classList.add('temporary');
+            
+            messageDiv.innerHTML = `<div class="content">${text}</div>`;
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            
+            return messageDiv;
+        }
+        
+        // Partner Banner Size Selection Function
+        function updatePartnerBannerSize() {
+            const sizeSelect = document.getElementById('partner-banner-size-select');
+            const widthInput = document.getElementById('partner-custom-width');
+            const heightInput = document.getElementById('partner-custom-height');
+            
+            if (sizeSelect && sizeSelect.value !== 'custom') {
+                const [width, height] = sizeSelect.value.split('x');
+                widthInput.value = width;
+                heightInput.value = height;
+            }
+            updatePartnerBannerQuantityPricing();
+        }
+
+        // Partner Banner Quantity Pricing Function
+        function updatePartnerBannerQuantityPricing() {
+            const width = parseFloat(document.getElementById('partner-custom-width').value) || 48;
+            const height = parseFloat(document.getElementById('partner-custom-height').value) || 24;
+            const sqft = (width * height) / 144;
+            
+            // Base price calculation (matching VistaPrint's $33.69 for 8 sq ft) - Partner gets 30% discount
+            const basePricePerSqft = 4.21 * 0.7; // 30% partner discount
+            const basePrice = sqft * basePricePerSqft;
+            
+            // Quantity breaks like VistaPrint
+            const qty1Price = basePrice;
+            const qty2Price = basePrice * 0.95; // 5% off
+            const qty3Price = basePrice * 0.92; // 8% off
+            const qty5Price = basePrice * 0.88; // 12% off
+            const qty10Price = basePrice * 0.85; // 15% off
+            
+        }
+        
+    </script>
+</body>
+</html>

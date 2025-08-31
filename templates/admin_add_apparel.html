@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DTF Designs - Add Apparel Item</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container py-5">
+        <h1 class="mb-4">Add New Apparel Item</h1>
+        
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <div class="mb-3">
+            <a href="{{ url_for('admin_apparel') }}" class="btn btn-secondary">← Back to Apparel</a>
+        </div>
+        
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body">
+                        <form method="POST">
+                            <div class="mb-3">
+                                <label for="garment_name" class="form-label">Garment Name</label>
+                                <input type="text" class="form-control" name="garment_name" id="garment_name" required>
+                            </div>
+                            
+                            <h6>Pricing Tiers:</h6>
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label for="tier_1_5" class="form-label">1-5 pieces</label>
+                                    <input type="number" step="0.01" class="form-control" name="tier_1_5" id="tier_1_5" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="tier_6_10" class="form-label">6-10 pieces</label>
+                                    <input type="number" step="0.01" class="form-control" name="tier_6_10" id="tier_6_10" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="tier_11_20" class="form-label">11-20 pieces</label>
+                                    <input type="number" step="0.01" class="form-control" name="tier_11_20" id="tier_11_20" required>
+                                </div>
+                            </div>
+                            
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label for="tier_21_50" class="form-label">21-50 pieces</label>
+                                    <input type="number" step="0.01" class="form-control" name="tier_21_50" id="tier_21_50" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="tier_51_100" class="form-label">51-100 pieces</label>
+                                    <input type="number" step="0.01" class="form-control" name="tier_51_100" id="tier_51_100" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="tier_101_plus" class="form-label">101+ pieces</label>
+                                    <input type="number" step="0.01" class="form-control" name="tier_101_plus" id="tier_101_plus" required>
+                                </div>
+                            </div>
+                            
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-success">Add Apparel Item</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

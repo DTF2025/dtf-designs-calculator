@@ -1,0 +1,19 @@
+{
+  "generated": "2025-08-31",
+  "paper_cost_per_sqft": {
+    "matte": 0.85,
+    "photo_gloss": 1.15
+  },
+  "ink_cost_per_sqft": 0.30,
+  "machine_overhead_per_sqft": 0.35,
+  "lamination_cost_per_sqft": 1.75,
+  "mounting_cost_per_sqft": {
+    "foam_3_16": 2.20,
+    "foam_1_2": 3.50,
+    "gator_3_16": 4.75
+  },
+  "tubepack_each": 1.25,
+  "setup_cost_per_job": 3.50,
+  "packaging_cost_per_job": 1.50,
+  "floor_margin_pct": 0.30
+}

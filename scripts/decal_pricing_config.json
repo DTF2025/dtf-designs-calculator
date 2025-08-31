@@ -1,0 +1,49 @@
+{
+  "version": "2025.09_CORRECTED_INDUSTRY_RATES",
+  "currency": "USD",
+  "order_minimum_total": 25.0,
+  "base_retail_per_sqft": {
+    "gloss": 25.25,
+    "matte": 26.50
+  },
+  "cut_adjustments_per_sqft": {
+    "kiss": 0.75,
+    "die": 1.25
+  },
+  "laminate_adjustments_per_sqft": {
+    "none": 0.0,
+    "gloss": 1.75,
+    "matte": 1.75,
+    "uv": 2.0
+  },
+  "small_piece_fee_per_unit": {
+    "min_side_threshold": 6.0,
+    "fee_per_piece": 0.35
+  },
+  "quantity_discounts": [
+    {
+      "min_qty": 101,
+      "discount_pct": 0.25
+    },
+    {
+      "min_qty": 51,
+      "discount_pct": 0.20
+    },
+    {
+      "min_qty": 26,
+      "discount_pct": 0.15
+    },
+    {
+      "min_qty": 11,
+      "discount_pct": 0.10
+    },
+    {
+      "min_qty": 1,
+      "discount_pct": 0.0
+    }
+  ],
+  "partner_discount_pct": 0.3,
+  "rounding": {
+    "money_digits": 2
+  }
+}

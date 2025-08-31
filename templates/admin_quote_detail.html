@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quote {{ quote.quote_number }} - DTF Designs Admin</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</head>
+<body>
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>📋 Quote {{ quote.quote_number }}</h2>
+        <div class="btn-group">
+            <a href="{{ url_for('admin_quotes') }}" class="btn btn-outline-secondary">← Back to Quotes</a>
+            <a href="{{ url_for('generate_quote_pdf', quote_number=quote.quote_number) }}" class="btn btn-danger">
+                <i class="fas fa-file-pdf me-1"></i>Download PDF
+            </a>
+            <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#emailPdfModal">
+                <i class="fas fa-envelope me-1"></i>Email PDF
+            </button>
+            <button class="btn btn-info" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                <i class="fas fa-upload me-1"></i>Upload Files
+            </button>
+            {% if quote.status != 'converted' %}
+            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#convertModal">
+                🔄 Convert to Order
+            </button>
+            {% else %}
+            <a href="{{ url_for('admin_order_detail', order_number=quote.order.order_number) }}" class="btn btn-success">
+                📦 View Order
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Quote Information -->
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Quote Details</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Quote Number:</strong> {{ quote.quote_number }}</p>
+                            <p><strong>Category:</strong> <span class="badge bg-secondary">{{ quote.category }}</span></p>
+                            <p><strong>Status:</strong> 
+                                {% if quote.status == 'pending' %}
+                                <span class="badge bg-warning">Pending</span>
+                                {% elif quote.status == 'approved' %}
+                                <span class="badge bg-success">Approved</span>
+                                {% elif quote.status == 'declined' %}
+                                <span class="badge bg-danger">Declined</span>
+                                {% elif quote.status == 'converted' %}
+                                <span class="badge bg-info">Converted</span>
+                                {% endif %}
+                            </p>
+                            <p><strong>Created:</strong> {{ quote.created_at.strftime('%B %d, %Y at %I:%M %p') }}</p>
+                            {% if quote.expires_at %}
+                            <p><strong>Expires:</strong> {{ quote.expires_at.strftime('%B %d, %Y') }}
+                                {% if quote.expires_at < moment().utcnow() %}
+                                <span class="badge bg-danger ms-1">Expired</span>
+                                {% endif %}
+                            </p>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6>Pricing</h6>
+                                    <p><strong>Calculated Price:</strong> ${{ "%.2f"|format(quote.calculated_price) }}</p>
+                                    {% if quote.admin_adjustments != 0 %}
+                                    <p><strong>Adjustments:</strong> 
+                                        {% if quote.admin_adjustments > 0 %}+{% endif %}${{ "%.2f"|format(quote.admin_adjustments) }}
+                                    </p>
+                                    {% endif %}
+                                    <p class="h5"><strong>Final Price:</strong> ${{ "%.2f"|format(quote.final_price or quote.calculated_price) }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Product Details -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Product Specifications</h5>
+                </div>
+                <div class="card-body">
+                    {% if quote.product_details %}
+                    <div class="row">
+                        {% for key, value in quote.product_details.items() %}
+                        {% if value and key not in ['customer_name', 'customer_email', 'customer_phone', 'customer_company', 'save_quote'] %}
+                        <div class="col-md-6 mb-2">
+                            <strong>{{ key.replace('_', ' ').title() }}:</strong> {{ value }}
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Admin Notes -->
+            {% if quote.notes %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Admin Notes</h5>
+                </div>
+                <div class="card-body">
+                    <p>{{ quote.notes }}</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Uploaded Files -->
+            {% if quote.files %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-paperclip me-2"></i>Uploaded Files ({{ quote.files|length }})</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for file in quote.files %}
+                        <div class="col-md-6 mb-3">
+                            <div class="card bg-secondary">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <h6 class="card-title">
+                                                <i class="fas fa-file me-1"></i>{{ file.original_filename }}
+                                            </h6>
+                                            <p class="card-text text-muted small">
+                                                <strong>Type:</strong> {{ file.file_type|title }}<br>
+                                                <strong>Size:</strong> {{ "%.1f"|format(file.file_size / 1024) }} KB<br>
+                                                <strong>Uploaded:</strong> {{ file.uploaded_at.strftime('%m/%d/%Y %I:%M %p') }}
+                                                {% if file.description %}
+                                                <br><strong>Description:</strong> {{ file.description }}
+                                                {% endif %}
+                                            </p>
+                                        </div>
+                                        <div class="btn-group-vertical">
+                                            <a href="/static/uploads/quotes/{{ file.filename }}" class="btn btn-sm btn-outline-primary" target="_blank">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            <form method="POST" action="{{ url_for('delete_quote_file', file_id=file.id) }}" 
+                                                  onsubmit="return confirm('Delete this file?')" class="d-inline">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Update Quote Status -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Update Quote</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin_update_quote_status', quote_number=quote.quote_number) }}">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label for="status" class="form-label">Status</label>
+                                <select name="status" class="form-select">
+                                    <option value="pending" {% if quote.status == 'pending' %}selected{% endif %}>Pending</option>
+                                    <option value="approved" {% if quote.status == 'approved' %}selected{% endif %}>Approved</option>
+                                    <option value="declined" {% if quote.status == 'declined' %}selected{% endif %}>Declined</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="price_adjustment" class="form-label">Price Adjustment ($)</label>
+                                <input type="number" step="0.01" name="price_adjustment" class="form-control" 
+                                       value="{{ quote.admin_adjustments }}" placeholder="0.00">
+                                <div class="form-text">Positive for increase, negative for discount</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">&nbsp;</label>
+                                <div>
+                                    <button type="submit" class="btn btn-primary">Update Quote</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <label for="admin_notes" class="form-label">Admin Notes</label>
+                            <textarea name="admin_notes" class="form-control" rows="3" 
+                                      placeholder="Add notes for internal reference...">{{ quote.notes or '' }}</textarea>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Customer Information -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Customer Information</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Name:</strong> {{ quote.customer.name }}</p>
+                    <p><strong>Email:</strong> 
+                        <a href="mailto:{{ quote.customer.email }}">{{ quote.customer.email }}</a>
+                    </p>
+                    {% if quote.customer.phone %}
+                    <p><strong>Phone:</strong> 
+                        <a href="tel:{{ quote.customer.phone }}">{{ quote.customer.phone }}</a>
+                    </p>
+                    {% endif %}
+                    {% if quote.customer.company %}
+                    <p><strong>Company:</strong> {{ quote.customer.company }}</p>
+                    {% endif %}
+                    <p><strong>Customer Type:</strong> 
+                        <span class="badge bg-secondary">{{ quote.customer.customer_type.title() }}</span>
+                    </p>
+                    <hr>
+                    <p><strong>Total Orders:</strong> {{ quote.customer.total_orders }}</p>
+                    <p><strong>Total Spent:</strong> ${{ "%.2f"|format(quote.customer.total_spent) }}</p>
+                    <p><strong>Customer Since:</strong> {{ quote.customer.created_at.strftime('%B %Y') }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Convert to Order Modal -->
+    {% if quote.status != 'converted' %}
+    <div class="modal fade" id="convertModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Convert Quote to Order</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST" action="{{ url_for('admin_convert_to_order', quote_number=quote.quote_number) }}">
+                    <div class="modal-body">
+                        <div class="alert alert-info">
+                            <h6>Quote Summary</h6>
+                            <p class="mb-0">Converting quote <strong>{{ quote.quote_number }}</strong> for 
+                            <strong>{{ quote.customer.name }}</strong> - 
+                            <strong>${{ "%.2f"|format(quote.final_price or quote.calculated_price) }}</strong></p>
+                        </div>
+                        
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="priority" class="form-label">Priority</label>
+                                <select name="priority" class="form-select">
+                                    <option value="standard">Standard</option>
+                                    <option value="rush">Rush</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="due_date" class="form-label">Due Date (Optional)</label>
+                                <input type="date" name="due_date" class="form-control">
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <label for="production_notes" class="form-label">Production Notes</label>
+                            <textarea name="production_notes" class="form-control" rows="3" 
+                                      placeholder="Special instructions for production team..."></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success">Create Order</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+<!-- File Upload Modal -->
+<div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="uploadModalLabel"><i class="fas fa-upload me-2"></i>Upload Files</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="{{ url_for('upload_quote_file', quote_number=quote.quote_number) }}" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="file" class="form-label">Select File</label>
+                        <input type="file" class="form-control" id="file" name="file" required 
+                               accept=".png,.jpg,.jpeg,.gif,.pdf,.doc,.docx,.ai,.eps,.psd,.svg">
+                        <div class="form-text">
+                            Supported: Images (PNG, JPG, GIF), Documents (PDF, DOC), Design files (AI, EPS, PSD, SVG)
+                            <br>Maximum size: 50MB
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description (Optional)</label>
+                        <input type="text" class="form-control" id="description" name="description" 
+                               placeholder="Brief description of the file...">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-upload me-1"></i>Upload File
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Email PDF Modal -->
+<div class="modal fade" id="emailPdfModal" tabindex="-1" aria-labelledby="emailPdfModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="emailPdfModalLabel"><i class="fas fa-envelope me-2"></i>Email PDF Quote</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="{{ url_for('email_quote_pdf', quote_number=quote.quote_number) }}">
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        This will generate a professional PDF quote and prepare it for email delivery to:
+                        <strong>{{ quote.customer.email }}</strong>
+                    </div>
+                    <div class="mb-3">
+                        <p><strong>Customer:</strong> {{ quote.customer.name }}</p>
+                        <p><strong>Email:</strong> {{ quote.customer.email }}</p>
+                        <p><strong>Quote Total:</strong> ${{ "%.2f"|format(quote.final_price or quote.calculated_price) }}</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-envelope me-1"></i>Generate & Prepare Email
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+</div>
+</body>
+</html>

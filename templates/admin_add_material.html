@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DTF Designs - Add Material</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container py-5">
+        <h1 class="mb-4">Add New Material</h1>
+        
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <div class="mb-3">
+            <a href="{{ url_for('admin_materials') }}" class="btn btn-secondary">← Back to Materials</a>
+        </div>
+        
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <form method="POST">
+                            <div class="mb-3">
+                                <label for="name" class="form-label">Material Name</label>
+                                <input type="text" class="form-control" name="name" id="name" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="material_type" class="form-label">Type</label>
+                                <select class="form-select" name="material_type" id="material_type" required>
+                                    <option value="banner">Banner</option>
+                                    <option value="cast_vinyl">Cast Vinyl</option>
+                                    <option value="vinyl">Vinyl</option>
+                                    <option value="decal">Decal</option>
+                                    <option value="poster">Poster</option>
+                                    <option value="cast_laminate">Cast Laminate</option>
+                                    <option value="vinyl_laminate">Vinyl Laminate</option>
+                                </select>
+                            </div>
+                            
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="width_inches" class="form-label">Width (inches)</label>
+                                    <input type="number" step="0.01" class="form-control" name="width_inches" id="width_inches" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="length_feet" class="form-label">Length (feet)</label>
+                                    <input type="number" step="0.01" class="form-control" name="length_feet" id="length_feet" required>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="total_cost" class="form-label">Total Cost Paid</label>
+                                <input type="number" step="0.01" class="form-control" name="total_cost" id="total_cost" required>
+                                <div class="form-text">Cost per sq ft will be calculated automatically</div>
+                            </div>
+                            
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-success">Add Material</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

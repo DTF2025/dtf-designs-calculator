@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DTF Designs - Manage Apparel</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container py-5">
+        <h1 class="mb-4">Manage Apparel Items</h1>
+        
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <a href="{{ url_for('admin_home') }}" class="btn btn-secondary">← Back to Admin</a>
+            <a href="{{ url_for('admin_add_apparel') }}" class="btn btn-success">Add New Apparel Item</a>
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Garment</th>
+                        <th>1-5 pcs</th>
+                        <th>6-10 pcs</th>
+                        <th>11-20 pcs</th>
+                        <th>21-50 pcs</th>
+                        <th>51-100 pcs</th>
+                        <th>101+ pcs</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in apparel_items %}
+                    <tr>
+                        <td><strong>{{ item.garment_name }}</strong></td>
+                        <td>${{ "%.2f"|format(item.tier_1_5) }}</td>
+                        <td>${{ "%.2f"|format(item.tier_6_10) }}</td>
+                        <td>${{ "%.2f"|format(item.tier_11_20) }}</td>
+                        <td>${{ "%.2f"|format(item.tier_21_50) }}</td>
+                        <td>${{ "%.2f"|format(item.tier_51_100) }}</td>
+                        <td>${{ "%.2f"|format(item.tier_101_plus) }}</td>
+                        <td>
+                            <a href="#" class="btn btn-sm btn-primary">Edit</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

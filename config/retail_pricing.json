@@ -1,0 +1,206 @@
+{
+  "generated": "2025-08-30",
+  "min_margin_floor_pct": 0.3,
+  "floor_mode": "AUTO_FLOOR",
+  "job_minimums": {
+    "banners": 35.0,
+    "decals": 35.0,
+    "posters": 20.0
+  },
+  "waste_buffers": {
+    "banners": [
+      {
+        "min": 0,
+        "max": 15,
+        "add": 1.0
+      },
+      {
+        "min": 15,
+        "max": 30,
+        "add": 1.5
+      },
+      {
+        "min": 30,
+        "max": 1000000000.0,
+        "add": 2.0
+      }
+    ],
+    "posters": [
+      {
+        "min": 0,
+        "max": 4,
+        "add": 0.25
+      },
+      {
+        "min": 4,
+        "max": 9,
+        "add": 0.5
+      },
+      {
+        "min": 9,
+        "max": 1000000000.0,
+        "add": 1.0
+      }
+    ]
+  },
+  "banners": {
+    "ladder_per_sqft": [
+      [
+        1,
+        4,
+        5.75
+      ],
+      [
+        5,
+        9,
+        5.25
+      ],
+      [
+        10,
+        24,
+        4.85
+      ],
+      [
+        25,
+        49,
+        4.5
+      ],
+      [
+        50,
+        99,
+        4.30
+      ],
+      [
+        100,
+        1000000000.0,
+        4.15
+      ]
+    ],
+    "materials": {
+      "alpha": {
+        "adder_per_sqft": 0.0,
+        "per_banner_min_bump": 0.0
+      },
+      "jetflex": {
+        "adder_per_sqft": 0.25,
+        "per_banner_min_bump": 5.0
+      }
+    },
+    "addons": {
+      "rush_pct": 0.25,
+      "reinforced_corners": 6.0,
+      "wind_slits": 10.0,
+      "pole_pockets_pair": 10.0,
+      "double_sided_mult": 1.8
+    }
+  },
+  "decals": {
+    "ladder_per_sqft": [
+      [
+        1,
+        9,
+        10.0
+      ],
+      [
+        10,
+        24,
+        9.5
+      ],
+      [
+        25,
+        49,
+        9.0
+      ],
+      [
+        50,
+        99,
+        7.5
+      ],
+      [
+        100,
+        249,
+        6.5
+      ],
+      [
+        250,
+        499,
+        5.5
+      ],
+      [
+        500,
+        999,
+        4.75
+      ],
+      [
+        1000,
+        1000000000.0,
+        4.25
+      ]
+    ],
+    "cut_adders_per_sqft": {
+      "kiss": 0.75,
+      "die": 1.5
+    },
+    "lamination_add_per_sqft": 2.0,
+    "intricate_mult": 1.15,
+    "small_piece_fees": {
+      "under_1in": 0.1,
+      "under_2in": 0.05
+    }
+  },
+  "posters": {
+    "ladder_per_sqft": [
+      [
+        1,
+        1,
+        7.75
+      ],
+      [
+        2,
+        4,
+        7.25
+      ],
+      [
+        5,
+        9,
+        6.75
+      ],
+      [
+        10,
+        24,
+        6.25
+      ],
+      [
+        25,
+        49,
+        5.75
+      ],
+      [
+        50,
+        99,
+        5.25
+      ],
+      [
+        100,
+        1000000000.0,
+        4.95
+      ]
+    ],
+    "materials": {
+      "matte": {
+        "adder_per_sqft": 0.0
+      },
+      "photo_gloss": {
+        "adder_per_sqft": 1.0
+      }
+    },
+    "lamination_per_sqft": 2.5,
+    "mounting_per_sqft": {
+      "foam_3_16": 3.0,
+      "foam_1_2": 5.0,
+      "gator_3_16": 6.5
+    },
+    "tubepack_each": 3.0,
+    "rush_pct": 0.25
+  }
+}
